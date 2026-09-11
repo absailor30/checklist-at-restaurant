@@ -39,6 +39,13 @@ export async function GET() {
         : 'Set',
   });
   checks.push({
+    name: 'Scheduled job secret',
+    ok: Boolean(process.env.CRON_SECRET),
+    detail: process.env.CRON_SECRET
+      ? 'Set — the overdue and escalation job can run'
+      : 'Missing CRON_SECRET — nothing will freeze or escalate while nobody has the app open',
+  });
+  checks.push({
     name: 'Setup password',
     ok: Boolean(setup),
     detail: setup ? 'Set' : 'Missing SETUP_PASSWORD — the /setup page will not work',

@@ -79,6 +79,11 @@ h2 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
 
 button, .btn {
   font: inherit;
+  /* Buttons do not inherit colour by default — a browser applies its own
+     ButtonText, which is black in every theme. Without this, any button whose
+     rule forgets `color` renders black text on a dark surface: the staff
+     picker names were invisible in dark mode for exactly this reason. */
+  color: var(--text);
   border-radius: 12px;
   border: 1px solid transparent;
   padding: 14px 18px;
@@ -103,11 +108,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .pick {
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; text-align: left;
-  background: var(--surface); border: 1px solid var(--border);
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border);
   margin-bottom: 10px; gap: 12px;
 }
-.pick .name { font-weight: 600; }
-.pick .meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
+/* Name above role, not run together on one line — these are spans, so they
+   need to be told to stack. */
+.pick .name { display: block; font-weight: 600; }
+.pick .meta { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
 .pick .chev { color: var(--muted); flex-shrink: 0; }
 
 .pinpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -160,7 +168,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .lockbox .row:last-child { margin-bottom: 0; }
 .lockbox .label { color: var(--muted); }
 
-input[type="text"], input[type="number"], textarea, select {
+input, textarea, select {
   font: inherit; width: 100%; padding: 13px 14px;
   border: 1px solid var(--border); border-radius: 11px;
   background: var(--surface); color: var(--text);
@@ -218,7 +226,7 @@ label { display: block; font-size: 14px; font-weight: 600; margin: 14px 0 6px; }
 .tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .tabcount {
   font-size: 11px; font-weight: 700; min-width: 19px; padding: 1px 5px;
-  border-radius: 999px; background: var(--border); color: var(--muted);
+  border-radius: 999px; background: var(--border); color: var(--text);
 }
 .tabcount.urgent { background: var(--locked); color: var(--surface); }
 
@@ -227,7 +235,64 @@ label { display: block; font-size: 14px; font-weight: 600; margin: 14px 0 6px; }
   background: var(--surface-2); padding: 4px; border-radius: 12px;
 }
 .segmented button {
-  flex: 1; min-height: 44px; padding: 8px 6px; font-size: 14px; font-weight: 600;
+  /* Three options share one row on a phone, so the label has to fit on one
+     line at 400px or the buttons end up different heights. */
+  flex: 1; min-height: 44px; padding: 8px 4px; font-size: 13px; font-weight: 600;
+  line-height: 1.2;
   background: transparent; border: none; color: var(--muted); border-radius: 9px;
 }
 .segmented button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+
+/* Owner dashboard ------------------------------------------------------ */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+.tilelabel { font-size: 13px; color: var(--muted); font-weight: 600; }
+/* The number is the point of a stat tile, so it gets the size. Tone is a
+   supporting signal — the note underneath says the same thing in words, so
+   the tile never depends on colour alone to be read. */
+.tilevalue {
+  font-size: 30px; font-weight: 680; letter-spacing: -0.02em;
+  margin: 6px 0 2px; line-height: 1.1;
+}
+.tilevalue.ok   { color: var(--ok); }
+.tilevalue.warn { color: var(--warn); }
+.tilevalue.bad  { color: var(--locked); }
+.tilenote { font-size: 12px; color: var(--muted); }
+
+.barrow { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.barlabel { font-weight: 600; }
+.barvalue { font-variant-numeric: tabular-nums; color: var(--muted); }
+
+.trend { display: flex; gap: 6px; align-items: flex-end; }
+.trendcol { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.trendbar-wrap {
+  width: 100%; height: 96px;
+  display: flex; align-items: flex-end;
+  background: var(--surface-2); border-radius: 6px; overflow: hidden;
+}
+/* Rounded top, square base: the bar is anchored to its baseline. */
+.trendbar { width: 100%; border-radius: 5px 5px 0 0; min-height: 2px; }
+.trendpct { font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 600; }
+.trendday { font-size: 11px; color: var(--muted); }
+
+/* Printing a summary for an inspection: drop the interface, keep the record. */
+@media print {
+  :root {
+    --bg: #ffffff; --surface: #ffffff; --surface-2: #f4f4f4;
+    --text: #000000; --muted: #444444; --border: #cccccc; --shadow: none;
+  }
+  .topbar, button, .btn, a.btn { display: none !important; }
+  .shell { max-width: none; padding: 0; }
+  .card, .item, .tile { break-inside: avoid; page-break-inside: avoid; }
+}

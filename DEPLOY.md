@@ -172,3 +172,59 @@ rather than missing data.
 Counts are deliberately avoided in these checks: an exact count is returned in
 an HTTP header, and a stripped header reads as zero, which is indistinguishable
 from an empty database. Rows are fetched instead.
+
+---
+
+## The scheduled job
+
+Locks refresh whenever someone opens a screen, so the app is never stale for a
+person looking at it. The scheduled job covers the hours when nobody is
+looking — overnight and between shifts — which is exactly when a missed closing
+task needs to reach a manager.
+
+### Turning it on
+
+1. Invent a long random string.
+2. Vercel → Settings → Environment Variables → add `CRON_SECRET` as a **Secret**
+   with that value, then redeploy. `/health` shows whether it is set.
+
+`vercel.json` already schedules `/api/cron/refresh` hourly.
+
+### Getting a shorter interval than hourly
+
+Vercel's Hobby plan runs cron jobs at most once a day, so the hourly schedule in
+`vercel.json` only takes effect on a paid plan. For finer granularity without
+paying, point a free external scheduler (cron-job.org, EasyCron, or a GitHub
+Actions schedule) at the same endpoint every 15 minutes:
+
+```
+GET https://<your-app>.vercel.app/api/cron/refresh
+Authorization: Bearer <your CRON_SECRET>
+```
+
+The endpoint is idempotent — running it more often than needed changes nothing
+beyond doing the same checks again.
+
+---
+
+## Signing up a real restaurant
+
+`/onboard` creates a real account: the group name, its outlets, and the owner's
+email and password. It provisions the standard roles, the reporting chain,
+opening/mid/closing shifts, and a starting set of checklists for every outlet,
+all as ordinary editable rows.
+
+Then `/manage` adds staff. Staff set their own PIN the first time they sign in,
+so nobody else ever knows it; if someone forgets theirs, reset it there.
+
+Staff are deactivated rather than deleted — their submissions are the audit
+trail, and a record pointing at a deleted person is worth nothing in a dispute.
+
+---
+
+## Reports
+
+`/owner` (owner and general manager only) shows completion per outlet, the
+trend across the period, and every out-of-range reading, waiver and manager
+completion. **Download CSV** exports the full record for an inspection;
+**Print summary** produces a paper copy of the dashboard.

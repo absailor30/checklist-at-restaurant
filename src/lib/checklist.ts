@@ -113,20 +113,30 @@ export async function ensureRuns(
  *
  * Every transition writes an immutable lock_events row.
  */
+export interface LockChange {
+  runId: string;
+  itemId: string;
+  outletId: string;
+  kind: 'frozen' | 'refrozen' | 'escalated';
+  escalationLevel: number;
+}
+
 export async function refreshLocks(
   db: SupabaseClient,
   org: { id: string; overdue_grace_minutes: number; unlock_escalation_minutes: number },
   outletId: string,
   date: string
-): Promise<void> {
+): Promise<LockChange[]> {
   const now = new Date();
+
+  const changes: LockChange[] = [];
 
   const { data: runs } = await db
     .from('checklist_runs')
     .select('id, starts_at, checklist_templates!inner(id)')
     .eq('outlet_id', outletId)
     .eq('run_date', date);
-  if (!runs?.length) return;
+  if (!runs?.length) return changes;
 
   const runIds = runs.map((r) => r.id);
 
@@ -182,6 +192,10 @@ export async function refreshLocks(
           event: 'frozen',
           comment: 'Due time passed with no submission.',
         });
+        changes.push({
+          runId: run.id, itemId: item.id, outletId,
+          kind: 'frozen', escalationLevel: 0,
+        });
         continue;
       }
 
@@ -202,6 +216,10 @@ export async function refreshLocks(
           org_id: org.id, run_id: run.id, checklist_item_id: item.id,
           event: 'refrozen',
           comment: 'Unlock window expired with no submission.',
+        });
+        changes.push({
+          runId: run.id, itemId: item.id, outletId,
+          kind: 'refrozen', escalationLevel: existing.escalation_level,
         });
         continue;
       }
@@ -225,6 +243,10 @@ export async function refreshLocks(
           from_level: existing.escalation_level, to_level: to,
           comment: 'Still not completed. Unlock rights extended one level up.',
         });
+        changes.push({
+          runId: run.id, itemId: item.id, outletId,
+          kind: 'escalated', escalationLevel: to,
+        });
       }
     }
   }
@@ -237,8 +259,23 @@ export async function refreshLocks(
     await db.from('item_locks').update(u.patch).eq('id', u.id);
   }
   if (events.length) {
-    await db.from('lock_events').insert(events);
+    await db.from('lock_events').insert(
+      // lock_events rows must share a shape within a batch: PostgREST takes the
+      // column list from the first row and sends NULL for keys missing later.
+      events.map((e) => ({
+        org_id: e.org_id,
+        run_id: e.run_id,
+        checklist_item_id: e.checklist_item_id,
+        event: e.event,
+        actor_user_id: null,
+        from_level: e.from_level ?? null,
+        to_level: e.to_level ?? null,
+        comment: e.comment,
+      }))
+    );
   }
+
+  return changes;
 }
 
 /** Roles that may unlock an item at a given escalation level, senior first. */

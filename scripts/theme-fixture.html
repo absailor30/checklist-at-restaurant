@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="globals.css">
+<title>Theme audit fixture</title></head>
+<body>
+<!-- Every visual component the app uses, in one page, so a contrast audit
+     covers all of them rather than whichever happened to be on screen. -->
+<div class="topbar">
+  <div><h1>Ramesh Kumar</h1><div class="sub">Kitchen Staff · Koramangala</div></div>
+  <button class="btn-ghost" style="width:auto;min-height:40px;padding:8px 14px">Done</button>
+</div>
+
+<div class="shell">
+  <h2>Kitchen Opening</h2>
+  <p class="lede">Opening shift · 3 of 14 complete</p>
+
+  <div class="banner error">A reading of 15°C is outside the expected range.</div>
+  <div class="banner info">Writing around 3,000 rows. Do not close the page.</div>
+
+  <div class="tiles">
+    <div class="tile"><div class="tilelabel">Done today</div>
+      <div class="tilevalue ok">92%</div><div class="tilenote">148 of 161 tasks</div></div>
+    <div class="tile"><div class="tilelabel">Locked now</div>
+      <div class="tilevalue bad">21</div><div class="tilenote">4 escalated</div></div>
+    <div class="tile"><div class="tilelabel">Out of range</div>
+      <div class="tilevalue warn">15</div><div class="tilenote">last 7 days</div></div>
+    <div class="tile"><div class="tilelabel">Waived</div>
+      <div class="tilevalue ok">0</div><div class="tilenote">3 done by managers</div></div>
+  </div>
+
+  <div class="card">
+    <div class="barrow"><span class="barlabel">Spice Garden — Koramangala</span>
+      <span class="barvalue">92%</span></div>
+    <div class="progress"><div style="width:92%"></div></div>
+    <div style="font-size:13px;color:var(--muted);margin-top:8px">148 of 161 done · 2 locked</div>
+  </div>
+
+  <div class="card">
+    <div class="trend">
+      <div class="trendcol"><div class="trendbar-wrap"><div class="trendbar" style="height:88%;background:var(--ok)"></div></div><div class="trendpct">88</div><div class="trendday">Mon</div></div>
+      <div class="trendcol"><div class="trendbar-wrap"><div class="trendbar" style="height:74%;background:var(--warn)"></div></div><div class="trendpct">74</div><div class="trendday">Tue</div></div>
+      <div class="trendcol"><div class="trendbar-wrap"><div class="trendbar" style="height:61%;background:var(--locked)"></div></div><div class="trendpct">61</div><div class="trendday">Wed</div></div>
+      <div class="trendcol"><div class="trendbar-wrap"><div class="trendbar" style="height:95%;background:var(--ok)"></div></div><div class="trendpct">95</div><div class="trendday">Thu</div></div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active">Locked<span class="tabcount urgent">4</span></button>
+    <button class="tab">Approve<span class="tabcount">7</span></button>
+    <button class="tab">Alerts</button>
+    <button class="tab">Outlets</button>
+  </div>
+
+  <div class="item">
+    <div class="head"><div class="title">Walk-in fridge temperature
+      <div class="desc">Read the display and photograph it.</div>
+      <div class="due">Due 07:20 am · reading required · needs manager approval</div></div>
+      <span class="tag plain">To do</span></div>
+    <button class="btn-primary" style="margin-top:12px">Mark complete</button>
+  </div>
+
+  <div class="item done">
+    <div class="head"><div class="title">Handwash station stocked</div>
+      <span class="tag ok">Done</span></div>
+    <div class="lockbox">
+      <div class="row"><span class="label">Done by</span><span>Anita Desai · 07:12 am</span></div>
+      <div class="row"><span class="label">Reading</span><span>3.5°C</span></div>
+    </div>
+  </div>
+
+  <div class="item locked">
+    <div class="head"><div class="title">FIFO labels checked
+      <div class="desc">Koramangala · Kitchen Opening · Kitchen Staff</div></div>
+      <span class="tag locked">Escalated ×1</span></div>
+    <div class="lockbox">
+      <div class="row"><span class="label">Locked</span><span>42 min ago</span></div>
+      <div class="row"><span class="label">Can unlock</span><span>Shift Manager, General Manager</span></div>
+      <div class="row"><span class="label">Escalates</span><span>in 18 min</span></div>
+    </div>
+    <div class="banner info" style="margin-top:12px;margin-bottom:0">Waiting on Shift Manager.</div>
+  </div>
+
+  <div class="item unlocked">
+    <div class="head"><div class="title">Fryer oil quality check</div>
+      <span class="tag warn">Unlocked</span></div>
+    <div class="lockbox">
+      <div class="row"><span class="label">Reopened until</span><span><strong>in 24 min</strong></span></div>
+      <div class="row"><span class="label">Manager note</span><span>Rush during service.</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>Reading (°C) — expected 0 to 5</label>
+    <input type="number" value="3.5">
+    <label>Comment (optional)</label>
+    <textarea placeholder="Anything the manager should know"></textarea>
+    <label>Reopen for</label>
+    <select><option>30 minutes</option></select>
+    <label>Setup password</label>
+    <input type="password" value="secretsecret">
+    <div class="segmented" style="margin-top:16px">
+      <button class="on">Let staff do it</button><button>I did it</button><button>Not needed</button>
+    </div>
+    <div class="btn-row" style="margin-top:18px">
+      <button class="btn-ghost">Cancel</button><button class="btn-primary">Confirm</button>
+    </div>
+  </div>
+
+  <button class="pick"><span><span class="name">Priya Nair</span>
+    <span class="meta">Shift Manager · set your PIN</span></span><span class="chev">›</span></button>
+
+  <div class="pindots"><span class="pindot filled"></span><span class="pindot filled"></span>
+    <span class="pindot"></span><span class="pindot"></span></div>
+  <div class="pinpad"><button>1</button><button>2</button><button>3</button>
+    <button>Clear</button><button>0</button><button>⌫</button></div>
+
+  <p class="empty">No checklist for your role on this shift today.</p>
+</div>
+</body></html>
