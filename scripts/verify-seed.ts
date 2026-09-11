@@ -32,8 +32,21 @@ function query(table: string) {
     then: (resolve: (v: any) => void) => resolve(result()),
     insert: (rows: any) => {
       const list = Array.isArray(rows) ? rows : [rows];
-      store.set(table, [...rowsOf(table), ...list]);
-      order.push({ table, rows: list });
+
+      // Reproduce PostgREST's bulk-insert behaviour: the column list comes
+      // from the first row, and any key missing from a later row is sent as
+      // NULL. An earlier version of this harness wrote each row with its own
+      // columns, which is not what the real API does — and so it missed a
+      // NOT NULL violation that only appeared in production.
+      const columns = Object.keys(list[0] ?? {});
+      const normalised = list.map((row) => {
+        const out: any = {};
+        for (const c of columns) out[c] = row[c] ?? null;
+        return out;
+      });
+
+      store.set(table, [...rowsOf(table), ...normalised]);
+      order.push({ table, rows: normalised });
       return Promise.resolve({ error: null });
     },
     delete: () => ({

@@ -65,10 +65,13 @@ export async function buildDemo(
     // no outlets, while a plain Create sees an organisation and skips. Treat
     // an organisation with no outlets as incomplete and rebuild it, rather
     // than reporting success and leaving the user stuck.
-    const { count } = await db
-      .from('outlets').select('*', { count: 'exact', head: true })
-      .eq('org_id', existing.id);
-    const incomplete = (count ?? 0) === 0;
+    const [{ count: outletCount }, { count: submissionCount }] = await Promise.all([
+      db.from('outlets').select('*', { count: 'exact', head: true }).eq('org_id', existing.id),
+      db.from('submissions').select('*', { count: 'exact', head: true }).eq('org_id', existing.id),
+    ]);
+    // Outlets alone are not enough: a run that died partway through wrote the
+    // outlets and then failed on submissions, leaving a demo with no history.
+    const incomplete = (outletCount ?? 0) === 0 || (submissionCount ?? 0) === 0;
 
     if (!opts.reset && !incomplete) return { alreadyExists: true };
 
@@ -251,41 +254,40 @@ export async function buildDemo(
             escalation_level: today ? 0 : 1,
             resolved_at: today ? null : addMin(dueAt, 75),
           });
-          eventRows.push({
-            id: uuid(), org_id: orgId, run_id: runId, checklist_item_id: item.id,
-            event: 'frozen', comment: 'Due time passed with no submission.',
-            created_at: dueAt,
-          });
+          eventRows.push(lockEvent({
+            orgId, runId, itemId: item.id, event: 'frozen',
+            actorUserId: null,
+            comment: 'Due time passed with no submission.',
+            createdAt: dueAt,
+          }));
           if (today || !manager) continue;
 
           // Historic misses were unlocked and completed late, which is the
           // normal path and the one managers will recognise.
-          eventRows.push({
-            id: uuid(), org_id: orgId, run_id: runId, checklist_item_id: item.id,
-            event: 'unlocked', actor_user_id: manager.id,
+          eventRows.push(lockEvent({
+            orgId, runId, itemId: item.id, event: 'unlocked',
+            actorUserId: manager.id,
             comment: 'Rush during service, staff reassigned. Reopened for 30 minutes.',
-            created_at: addMin(dueAt, 45),
-          });
-          submissionRows.push({
-            id: uuid(), org_id: orgId, outlet_id: outlet.id, run_id: runId,
-            checklist_item_id: item.id, user_id: who.id,
-            ...proofValue(item),
+            createdAt: addMin(dueAt, 45),
+          }));
+          submissionRows.push(submission({
+            orgId, outletId: outlet.id, runId, item, userId: who.id,
             status: item.requires_approval ? 'approved' : 'submitted',
-            was_late: true, submitted_at: addMin(dueAt, 60),
-            reviewed_by: item.requires_approval ? manager.id : null,
-            reviewed_at: item.requires_approval ? addMin(dueAt, 70) : null,
-          });
+            wasLate: true,
+            submittedAt: addMin(dueAt, 60),
+            reviewedBy: item.requires_approval ? manager.id : null,
+            reviewedAt: item.requires_approval ? addMin(dueAt, 70) : null,
+          }));
           done++;
           continue;
         }
 
-        submissionRows.push({
-          id: uuid(), org_id: orgId, outlet_id: outlet.id, run_id: runId,
-          checklist_item_id: item.id, user_id: who.id,
-          ...proofValue(item),
+        submissionRows.push(submission({
+          orgId, outletId: outlet.id, runId, item, userId: who.id,
           status: item.requires_approval ? 'approved' : 'submitted',
-          submitted_at: addMin(dueAt, -5),
-        });
+          wasLate: false,
+          submittedAt: addMin(dueAt, -5),
+        }));
         done++;
       }
 
@@ -318,11 +320,15 @@ export async function buildDemo(
   // Read back before reporting success. Claiming the demo is ready when the
   // outlets did not land is exactly what left the setup page and the app
   // disagreeing about whether anything existed.
-  const { count: writtenOutlets } = await db
-    .from('outlets').select('*', { count: 'exact', head: true }).eq('org_id', orgId);
-  if ((writtenOutlets ?? 0) !== outletRows.length) {
+  const [{ count: writtenOutlets }, { count: writtenSubmissions }] = await Promise.all([
+    db.from('outlets').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
+    db.from('submissions').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
+  ]);
+  if ((writtenOutlets ?? 0) !== outletRows.length ||
+      (writtenSubmissions ?? 0) !== submissionRows.length) {
     throw new Error(
-      `Only ${writtenOutlets ?? 0} of ${outletRows.length} outlets were written. ` +
+      `Wrote ${writtenOutlets ?? 0}/${outletRows.length} outlets and ` +
+      `${writtenSubmissions ?? 0}/${submissionRows.length} submissions. ` +
       `The demo is incomplete — press Rebuild to try again.`
     );
   }
@@ -339,8 +345,78 @@ export async function buildDemo(
   };
 }
 
+// Every row in a batch must carry exactly the same keys.
+//
+// PostgREST builds the column list for a bulk insert from the first row of the
+// array. Any key missing from a later row is sent as NULL, which silently
+// violates NOT NULL constraints — a batch of submissions where only the late
+// ones carried was_late pushed NULL into a NOT NULL column for every other
+// row. Building rows through these helpers keeps the shapes identical by
+// construction rather than by care.
+function submission(o: {
+  orgId: string; outletId: string; runId: string; item: any; userId: string;
+  status: string; wasLate: boolean; submittedAt: string;
+  reviewedBy?: string | null; reviewedAt?: string | null;
+}) {
+  const proof = proofValue(o.item);
+  return {
+    id: uuid(),
+    org_id: o.orgId,
+    outlet_id: o.outletId,
+    run_id: o.runId,
+    checklist_item_id: o.item.id,
+    user_id: o.userId,
+    value_number: proof.value_number ?? null,
+    value_text: proof.value_text ?? null,
+    photo_path: proof.photo_path ?? null,
+    comment: proof.comment ?? null,
+    status: o.status,
+    out_of_bounds: proof.out_of_bounds ?? false,
+    was_late: o.wasLate,
+    device_captured_at: null,
+    submitted_at: o.submittedAt,
+    reviewed_by: o.reviewedBy ?? null,
+    reviewed_at: o.reviewedAt ?? null,
+    review_note: null,
+    superseded_by: null,
+  };
+}
+
+function lockEvent(o: {
+  orgId: string; runId: string; itemId: string; event: string;
+  actorUserId: string | null; comment: string; createdAt: string;
+}) {
+  return {
+    id: uuid(),
+    org_id: o.orgId,
+    run_id: o.runId,
+    checklist_item_id: o.itemId,
+    event: o.event,
+    actor_user_id: o.actorUserId,
+    from_level: null,
+    to_level: null,
+    comment: o.comment,
+    created_at: o.createdAt,
+  };
+}
+
 // Chunked so a single request never carries an unreasonable payload.
 async function insertAll(db: SupabaseClient, table: string, rows: any[], chunk = 500) {
+  if (rows.length === 0) return;
+
+  // Catch a shape mismatch here, where the message names the culprit, rather
+  // than as an opaque NOT NULL violation from the database.
+  const shape = Object.keys(rows[0]).sort().join(',');
+  for (const row of rows) {
+    const rowShape = Object.keys(row).sort().join(',');
+    if (rowShape !== shape) {
+      throw new Error(
+        `${table}: rows in a batch must all have the same columns. ` +
+        `Expected [${shape}] but found [${rowShape}].`
+      );
+    }
+  }
+
   for (let i = 0; i < rows.length; i += chunk) {
     const { error } = await db.from(table).insert(rows.slice(i, i + chunk));
     if (error) throw new Error(`${table}: ${error.message}`);
