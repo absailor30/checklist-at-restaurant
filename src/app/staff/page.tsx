@@ -55,15 +55,26 @@ export default function StaffPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [active, setActive] = useState<{ run: Run; item: Item } | null>(null);
+  // Distinguish "still loading" from "loaded, but there is nothing there".
+  // Conflating the two leaves a spinner running forever with no explanation.
+  const [loadingOutlets, setLoadingOutlets] = useState(true);
 
   // --- device setup -------------------------------------------------------
 
   useEffect(() => {
     (async () => {
       const res = await fetch('/api/staff/outlets');
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // Surface the real reason. A misconfigured key or an unreachable
+        // database is a very different problem from an empty database.
+        setError(data.error ?? `The server returned an error (${res.status}).`);
+        setLoadingOutlets(false);
+        return;
+      }
       const list: Outlet[] = data.outlets ?? [];
       setOutlets(list);
+      setLoadingOutlets(false);
 
       // The outlet is a property of the device, not the person, so it is
       // remembered between sessions. Everything else is cleared each time.
@@ -74,7 +85,10 @@ export default function StaffPage() {
         setTimezone(found.timezone);
         void loadStaff(found);
       }
-    })().catch(() => setError('Could not reach the server.'));
+    })().catch(() => {
+      setError('Could not reach the server. Check your connection and reload.');
+      setLoadingOutlets(false);
+    });
   }, []);
 
   const loadStaff = useCallback(async (o: Outlet) => {
@@ -158,14 +172,30 @@ export default function StaffPage() {
   if (step === 'outlet') {
     return (
       <Screen title="Choose this device's outlet" lede="You only need to do this once on this device.">
-        {outlets.length === 0 && <div className="spinner" />}
+        {error && <div className="banner error">{error}</div>}
+
+        {loadingOutlets && <div className="spinner" />}
+
+        {!loadingOutlets && outlets.length === 0 && !error && (
+          <div className="card">
+            <strong>No outlets set up yet</strong>
+            <p className="lede" style={{ margin: '8px 0 14px' }}>
+              The database is reachable but has no restaurants in it. Create the
+              demo data first, then come back here.
+            </p>
+            <a className="btn btn-primary" href="/setup"
+               style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
+              Go to setup
+            </a>
+          </div>
+        )}
+
         {outlets.map((o) => (
           <button key={o.id} className="pick" onClick={() => chooseOutlet(o)}>
             <span><span className="name">{o.name}</span></span>
             <span className="chev">›</span>
           </button>
         ))}
-        {error && <div className="banner error">{error}</div>}
       </Screen>
     );
   }
