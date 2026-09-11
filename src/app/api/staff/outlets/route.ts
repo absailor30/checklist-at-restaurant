@@ -12,10 +12,21 @@ export async function GET() {
   const db = createAdminClient();
   const { data, error } = await db
     .from('outlets')
-    .select('id, name, org_id, timezone')
-    .eq('is_active', true)
+    .select('id, name, org_id, timezone, is_active')
     .order('name');
 
   if (error) return json({ error: error.message }, { status: 500 });
-  return json({ outlets: data });
+
+  // Filter here rather than in the query. A row whose is_active is null —
+  // possible if it was written before the column existed, or by a path that
+  // omitted it — would be excluded by `.eq('is_active', true)` and the outlet
+  // would silently vanish from the picker. Only an explicit false hides it.
+  const outlets = (data ?? []).filter((o) => o.is_active !== false);
+
+  // serverTime proves the response is fresh rather than a cached copy.
+  return json({
+    outlets,
+    totalRows: data?.length ?? 0,
+    serverTime: new Date().toISOString(),
+  });
 }

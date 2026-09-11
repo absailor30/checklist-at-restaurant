@@ -147,3 +147,28 @@ Step 3.
 
 **Photo upload fails** — the storage bucket was not created. Re-run Step 3;
 creating the bucket is part of it and is safe to repeat.
+
+---
+
+## If the staff screen says there are no outlets
+
+The setup page and the staff screen read the same database, so they should
+never disagree. When they do, the cause is almost always a cached response
+rather than missing data.
+
+1. Open `/health`. The last row names the server time, the Supabase project,
+   and the deployment that answered. The "Outlet rows" row lists the outlets
+   that connection can actually see.
+2. Compare the project reference on that row with the one in Vercel's
+   environment variables. If they differ, the two pages are pointing at
+   different Supabase projects — fix `NEXT_PUBLIC_SUPABASE_URL` in Vercel and
+   redeploy.
+3. If `/health` lists the outlets but `/staff` does not, the staff screen's
+   empty state prints what the server returned and when. A stale timestamp
+   means a cache; a fresh timestamp with zero rows is a real query problem.
+4. If an outlet shows `[INACTIVE]`, it exists but is switched off and will not
+   appear to staff by design.
+
+Counts are deliberately avoided in these checks: an exact count is returned in
+an HTTP header, and a stripped header reads as zero, which is indistinguishable
+from an empty database. Rows are fetched instead.

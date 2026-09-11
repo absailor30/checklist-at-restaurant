@@ -50,8 +50,12 @@ export async function GET() {
       const { createAdminClient } = await import('@/lib/supabase/admin');
       const db = createAdminClient();
 
-      const { count: outletCount, error: outletError } = await db
-        .from('outlets').select('*', { count: 'exact', head: true });
+      // Fetch the rows themselves, not just a count. A count that disagrees
+      // with the rows points at the query; rows that disagree between two
+      // endpoints point at the connection.
+      const { data: outletRows, error: outletError } = await db
+        .from('outlets').select('id, name, is_active, org_id');
+      const outletCount = outletRows?.length ?? 0;
 
       if (outletError) {
         checks.push({
@@ -64,17 +68,43 @@ export async function GET() {
       } else {
         checks.push({ name: 'Database tables', ok: true, detail: 'Reachable' });
 
-        const [{ count: users }, { count: submissions }] = await Promise.all([
-          db.from('users').select('*', { count: 'exact', head: true }),
-          db.from('submissions').select('*', { count: 'exact', head: true }),
-        ]);
+        // Ask for rows, not counts. An exact count is returned in the
+        // Content-Range header, and a stripped or absent header reads as zero —
+        // indistinguishable from an empty database. Rows cannot lie that way.
+        const [{ data: userRows }, { count: submissionCount }, { data: orgs }] =
+          await Promise.all([
+            db.from('users').select('id'),
+            db.from('submissions').select('id', { count: 'exact', head: true }),
+            db.from('organisations').select('id, name, is_demo'),
+          ]);
+        const users = userRows?.length ?? 0;
+        const submissions = submissionCount === null || submissionCount === undefined
+          ? 'unknown'
+          : submissionCount;
 
         checks.push({
           name: 'Demo data',
-          ok: (outletCount ?? 0) > 0,
-          detail: (outletCount ?? 0) > 0
+          ok: outletCount > 0,
+          detail: outletCount > 0
             ? `${outletCount} outlets, ${users ?? 0} staff, ${submissions ?? 0} submissions`
             : 'No outlets yet — open /setup and create the demo data',
+        });
+
+        checks.push({
+          name: 'Organisations found',
+          ok: (orgs ?? []).length > 0,
+          detail: (orgs ?? []).length
+            ? (orgs ?? []).map((o: any) => `${o.name}${o.is_demo ? ' (demo)' : ''}`).join(', ')
+            : 'None',
+        });
+
+        checks.push({
+          name: 'Outlet rows',
+          ok: outletCount > 0,
+          detail: outletCount
+            ? (outletRows ?? []).map((o: any) =>
+                `${o.name}${o.is_active ? '' : ' [INACTIVE]'}`).join(' · ')
+            : 'None returned by this connection',
         });
       }
 
@@ -97,6 +127,24 @@ export async function GET() {
     }
   }
 
+  // Identify which deployment and which Supabase project answered, so two
+  // endpoints that disagree can be compared directly rather than argued about.
+  checks.push({
+    name: 'This response',
+    ok: true,
+    detail:
+      `${new Date().toISOString()} · project ${projectRef(url)} · ` +
+      `deployment ${(process.env.VERCEL_DEPLOYMENT_ID ?? 'local').slice(-8)} · ` +
+      `commit ${(process.env.VERCEL_GIT_COMMIT_SHA ?? 'local').slice(0, 7)}`,
+  });
+
   const healthy = checks.every((c) => c.ok);
   return json({ healthy, checks }, { status: healthy ? 200 : 503 });
+}
+
+// The project reference embedded in a Supabase URL, so two endpoints pointing
+// at different projects become obvious.
+function projectRef(url?: string): string {
+  if (!url) return 'unknown';
+  return url.replace('https://', '').split('.')[0];
 }

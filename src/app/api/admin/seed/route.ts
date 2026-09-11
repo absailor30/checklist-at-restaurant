@@ -22,9 +22,9 @@ export async function GET() {
 
     if (!org) return json({ exists: false });
 
-    const [{ count: outlets }, { count: submissions }, { data: managers }] = await Promise.all([
-      db.from('outlets').select('*', { count: 'exact', head: true }).eq('org_id', org.id),
-      db.from('submissions').select('*', { count: 'exact', head: true }).eq('org_id', org.id),
+    const [{ data: outletRows }, { count: submissions }, { data: managers }] = await Promise.all([
+      db.from('outlets').select('id').eq('org_id', org.id),
+      db.from('submissions').select('id', { count: 'exact', head: true }).eq('org_id', org.id),
       db.from('users')
         .select('name, email, roles!inner(name, can_review)')
         .eq('org_id', org.id).not('email', 'is', null),
@@ -32,7 +32,7 @@ export async function GET() {
 
     return json({
       exists: true,
-      outlets: outlets ?? 0,
+      outlets: outletRows?.length ?? 0,
       submissions: submissions ?? 0,
       pin: DEMO_PIN,
       managerPassword: DEMO_MANAGER_PASSWORD,
@@ -81,16 +81,20 @@ export async function POST(request: Request) {
 // employee, and must never be readable by anyone holding a guessable URL.
 // Reads go through short-lived signed URLs instead.
 async function ensurePhotoBucket(db: ReturnType<typeof createAdminClient>) {
-  const { data: buckets } = await db.storage.listBuckets();
-  if (buckets?.some((b) => b.name === PHOTO_BUCKET)) return;
-
+  // Attempt creation directly rather than listing first. Listing can come back
+  // empty for reasons unrelated to whether the bucket exists, and acting on
+  // that produced a setup that reported storage missing while photos worked —
+  // or worse, skipped creating it.
   const { error } = await db.storage.createBucket(PHOTO_BUCKET, {
     public: false,
     fileSizeLimit: 8 * 1024 * 1024,
     allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
   });
-  // A concurrent call may have created it first; that is not a failure.
-  if (error && !/already exists/i.test(error.message)) throw error;
+
+  // Already existing is the expected outcome on every run after the first.
+  if (error && !/already exists|duplicate/i.test(error.message)) {
+    throw new Error(`Could not create the photo storage bucket: ${error.message}`);
+  }
 }
 
 // Constant-time so the password cannot be guessed character by character.

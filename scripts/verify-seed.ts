@@ -26,9 +26,11 @@ function query(table: string) {
       return api;
     },
     eq: (col: string, value: unknown) => { filters.push({ col, value }); return api; },
+    limit: (n: number) => { api._limit = n; return api; },
+    order: () => api,
     not: () => api,
-    maybeSingle: () => Promise.resolve({ data: matches()[0] ?? null }),
-    single: () => Promise.resolve({ data: matches()[0] ?? null }),
+    maybeSingle: () => Promise.resolve({ data: matches()[0] ?? null, error: null }),
+    single: () => Promise.resolve({ data: matches()[0] ?? null, error: null }),
     then: (resolve: (v: any) => void) => resolve(result()),
     insert: (rows: any) => {
       const list = Array.isArray(rows) ? rows : [rows];
@@ -77,7 +79,8 @@ function query(table: string) {
     return rowsOf(table).filter((r) => filters.every((f) => r[f.col] === f.value));
   }
   function result() {
-    const rows = matches();
+    let rows = matches();
+    if (typeof api._limit === 'number') rows = rows.slice(0, api._limit);
     return api._counting
       ? { count: rows.length, data: rows, error: null }
       : { data: rows, error: null };

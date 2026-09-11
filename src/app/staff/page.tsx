@@ -58,13 +58,40 @@ export default function StaffPage() {
   // Distinguish "still loading" from "loaded, but there is nothing there".
   // Conflating the two leaves a spinner running forever with no explanation.
   const [loadingOutlets, setLoadingOutlets] = useState(true);
+  // What the server reported, shown when the list comes back empty so the
+  // screen can be diagnosed from a screenshot rather than guesswork.
+  const [diagnostic, setDiagnostic] = useState<string | null>(null);
 
   // --- device setup -------------------------------------------------------
 
   useEffect(() => {
     (async () => {
-      const res = await fetch('/api/staff/outlets', { cache: 'no-store' });
-      const data = await res.json().catch(() => ({}));
+      // A unique query string defeats any cache between here and the server —
+      // browser, service worker or CDN. An empty outlet list that was cached
+      // before the data existed kept the picker empty long afterwards.
+      const ask = (attempt: number) =>
+        fetch(`/api/staff/outlets?t=${Date.now()}-${attempt}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' },
+        });
+
+      let res = await ask(1);
+      let data = await res.json().catch(() => ({}));
+
+      // One retry if the list is empty: distinguishes a genuinely empty
+      // database from a stale response.
+      if (res.ok && (data.outlets ?? []).length === 0) {
+        await new Promise((r) => setTimeout(r, 400));
+        res = await ask(2);
+        data = await res.json().catch(() => ({}));
+      }
+
+      setDiagnostic(
+        `server returned ${(data.outlets ?? []).length} outlets ` +
+        `of ${data.totalRows ?? 0} rows` +
+        (data.serverTime ? ` at ${new Date(data.serverTime).toLocaleTimeString()}` : '')
+      );
+
       if (!res.ok) {
         // Surface the real reason. A misconfigured key or an unreachable
         // database is a very different problem from an empty database.
@@ -180,9 +207,14 @@ export default function StaffPage() {
           <div className="card">
             <strong>No outlets set up yet</strong>
             <p className="lede" style={{ margin: '8px 0 14px' }}>
-              The database is reachable but has no restaurants in it. Create the
+              The database is reachable but returned no restaurants. Create the
               demo data first, then come back here.
             </p>
+            {diagnostic && (
+              <p className="lede" style={{ fontSize: 12, margin: '0 0 14px' }}>
+                {diagnostic}
+              </p>
+            )}
             <a className="btn btn-primary" href="/setup"
                style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
               Go to setup

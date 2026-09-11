@@ -65,13 +65,17 @@ export async function buildDemo(
     // no outlets, while a plain Create sees an organisation and skips. Treat
     // an organisation with no outlets as incomplete and rebuild it, rather
     // than reporting success and leaving the user stuck.
-    const [{ count: outletCount }, { count: submissionCount }] = await Promise.all([
-      db.from('outlets').select('*', { count: 'exact', head: true }).eq('org_id', existing.id),
-      db.from('submissions').select('*', { count: 'exact', head: true }).eq('org_id', existing.id),
+    // Fetch rows rather than counts. An exact count arrives in a response
+    // header, and a missing header reads as zero — which would make a complete
+    // demo look empty and get deleted and rebuilt on every run.
+    const [{ data: existingOutlets }, { data: existingSubmissions }] = await Promise.all([
+      db.from('outlets').select('id').eq('org_id', existing.id),
+      db.from('submissions').select('id').eq('org_id', existing.id).limit(1),
     ]);
     // Outlets alone are not enough: a run that died partway through wrote the
     // outlets and then failed on submissions, leaving a demo with no history.
-    const incomplete = (outletCount ?? 0) === 0 || (submissionCount ?? 0) === 0;
+    const incomplete =
+      (existingOutlets?.length ?? 0) === 0 || (existingSubmissions?.length ?? 0) === 0;
 
     if (!opts.reset && !incomplete) return { alreadyExists: true };
 
@@ -320,15 +324,15 @@ export async function buildDemo(
   // Read back before reporting success. Claiming the demo is ready when the
   // outlets did not land is exactly what left the setup page and the app
   // disagreeing about whether anything existed.
-  const [{ count: writtenOutlets }, { count: writtenSubmissions }] = await Promise.all([
-    db.from('outlets').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
-    db.from('submissions').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
+  const [{ data: writtenOutlets }, { data: writtenSubmissions }] = await Promise.all([
+    db.from('outlets').select('id').eq('org_id', orgId),
+    db.from('submissions').select('id').eq('org_id', orgId).limit(1),
   ]);
-  if ((writtenOutlets ?? 0) !== outletRows.length ||
-      (writtenSubmissions ?? 0) !== submissionRows.length) {
+  if ((writtenOutlets?.length ?? 0) !== outletRows.length ||
+      (writtenSubmissions?.length ?? 0) === 0) {
     throw new Error(
-      `Wrote ${writtenOutlets ?? 0}/${outletRows.length} outlets and ` +
-      `${writtenSubmissions ?? 0}/${submissionRows.length} submissions. ` +
+      `Wrote ${writtenOutlets?.length ?? 0} of ${outletRows.length} outlets and ` +
+      `${(writtenSubmissions?.length ?? 0) === 0 ? 'no' : 'some'} submissions. ` +
       `The demo is incomplete — press Rebuild to try again.`
     );
   }
