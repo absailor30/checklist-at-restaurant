@@ -51,8 +51,8 @@ public repository.
 1. Go to **vercel.com** and sign up with GitHub.
 2. Click **Add New → Project**.
 3. Find `checklist-at-restaurant` in the list and click **Import**.
-4. **Important:** under Git Branch, choose `claude/peaceful-babbage-8tyybi`.
-   That is where the app lives. The `main` branch has almost nothing on it.
+4. Leave Application Preset, Root Directory and Build settings exactly as
+   they are — Vercel detects Next.js on its own.
 5. Expand **Environment Variables** and add all five, one per row:
 
    ```
