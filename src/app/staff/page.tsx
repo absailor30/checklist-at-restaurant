@@ -63,7 +63,7 @@ export default function StaffPage() {
 
   useEffect(() => {
     (async () => {
-      const res = await fetch('/api/staff/outlets');
+      const res = await fetch('/api/staff/outlets', { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         // Surface the real reason. A misconfigured key or an unreachable
@@ -92,7 +92,7 @@ export default function StaffPage() {
   }, []);
 
   const loadStaff = useCallback(async (o: Outlet) => {
-    const res = await fetch(`/api/staff/login?outletId=${o.id}`);
+    const res = await fetch(`/api/staff/login?outletId=${o.id}`, { cache: 'no-store' });
     const data = await res.json();
     setStaff(data.staff ?? []);
     setStep('staff');
@@ -119,7 +119,7 @@ export default function StaffPage() {
       const data = await res.json();
       if (!res.ok) { setError(data.error); setPin(''); return; }
 
-      const shiftRes = await fetch('/api/staff/shift');
+      const shiftRes = await fetch('/api/staff/shift', { cache: 'no-store' });
       const shiftData = await shiftRes.json();
       setShifts(shiftData.shifts ?? []);
       setStep('shift');
@@ -144,7 +144,7 @@ export default function StaffPage() {
   }
 
   const loadChecklist = useCallback(async () => {
-    const res = await fetch('/api/staff/checklist');
+    const res = await fetch('/api/staff/checklist', { cache: 'no-store' });
     const data = await res.json();
     if (!res.ok) { setError(data.error); return; }
     setRuns(data.runs ?? []);

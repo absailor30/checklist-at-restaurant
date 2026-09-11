@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { json } from '@/lib/no-store';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { currentManager } from '@/lib/supabase/server';
 import { canUnlock, chainContext, unlockRefusalReason } from '@/lib/authority';
@@ -17,19 +17,19 @@ export const dynamic = 'force-dynamic';
 // Both require a comment.
 export async function POST(request: Request) {
   const manager = await currentManager();
-  if (!manager) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
+  if (!manager) return json({ error: 'Not signed in.' }, { status: 401 });
   if (!manager.canUnlock) {
-    return NextResponse.json({ error: 'Your role cannot resolve tasks.' }, { status: 403 });
+    return json({ error: 'Your role cannot resolve tasks.' }, { status: 403 });
   }
 
   const { lockId, action, comment, value } = await request.json();
   if (action !== 'complete' && action !== 'waive') {
-    return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
+    return json({ error: 'Unknown action.' }, { status: 400 });
   }
 
   const reason = String(comment ?? '').trim();
   if (reason.length < 5) {
-    return NextResponse.json(
+    return json(
       { error: 'A comment is required — it is recorded permanently.' },
       { status: 400 }
     );
@@ -40,14 +40,14 @@ export async function POST(request: Request) {
   const { data: lock } = await db
     .from('item_locks').select('*')
     .eq('id', lockId).eq('org_id', manager.orgId).maybeSingle();
-  if (!lock) return NextResponse.json({ error: 'Task not found.' }, { status: 404 });
+  if (!lock) return json({ error: 'Task not found.' }, { status: 404 });
   if (lock.state === 'resolved') {
-    return NextResponse.json({ error: 'That task is already resolved.' }, { status: 409 });
+    return json({ error: 'That task is already resolved.' }, { status: 409 });
   }
 
   const { roles, submitterLevel } = await chainContext(db, manager.orgId, lock.run_id);
   if (!canUnlock(roles, manager.roleId, submitterLevel, lock.escalation_level)) {
-    return NextResponse.json(
+    return json(
       { error: unlockRefusalReason(roles, submitterLevel, lock.escalation_level) },
       { status: 403 }
     );
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
   if (action === 'complete' && item?.proof === 'number' && value !== undefined && value !== '') {
     valueNumber = Number(value);
     if (Number.isNaN(valueNumber)) {
-      return NextResponse.json({ error: 'That reading is not a number.' }, { status: 400 });
+      return json({ error: 'That reading is not a number.' }, { status: 400 });
     }
     outOfBounds =
       (item.min_value !== null && valueNumber < Number(item.min_value)) ||
@@ -88,9 +88,9 @@ export async function POST(request: Request) {
 
   if (error) {
     if (error.code === '23505') {
-      return NextResponse.json({ error: 'Someone already completed this.' }, { status: 409 });
+      return json({ error: 'Someone already completed this.' }, { status: 409 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return json({ error: error.message }, { status: 500 });
   }
 
   await db.from('item_locks')
@@ -104,5 +104,5 @@ export async function POST(request: Request) {
     actor_user_id: manager.id, comment: reason,
   });
 
-  return NextResponse.json({ ok: true, outOfBounds });
+  return json({ ok: true, outOfBounds });
 }

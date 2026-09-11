@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { json } from '@/lib/no-store';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 // These routes read a session cookie and live database state, so they must run
@@ -16,6 +16,6 @@ export async function GET() {
     .eq('is_active', true)
     .order('name');
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ outlets: data });
+  if (error) return json({ error: error.message }, { status: 500 });
+  return json({ outlets: data });
 }

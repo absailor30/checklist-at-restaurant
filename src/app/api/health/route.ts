@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { json } from '@/lib/no-store';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,5 +98,5 @@ export async function GET() {
   }
 
   const healthy = checks.every((c) => c.ok);
-  return NextResponse.json({ healthy, checks }, { status: healthy ? 200 : 503 });
+  return json({ healthy, checks }, { status: healthy ? 200 : 503 });
 }

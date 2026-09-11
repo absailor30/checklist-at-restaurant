@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { json } from '@/lib/no-store';
 import crypto from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { buildDemo, DEMO_ORG, DEMO_PIN, DEMO_MANAGER_PASSWORD } from '@/lib/seed-core';
@@ -20,7 +20,7 @@ export async function GET() {
     const { data: org } = await db
       .from('organisations').select('id').eq('name', DEMO_ORG).maybeSingle();
 
-    if (!org) return NextResponse.json({ exists: false });
+    if (!org) return json({ exists: false });
 
     const [{ count: outlets }, { count: submissions }, { data: managers }] = await Promise.all([
       db.from('outlets').select('*', { count: 'exact', head: true }).eq('org_id', org.id),
@@ -30,7 +30,7 @@ export async function GET() {
         .eq('org_id', org.id).not('email', 'is', null),
     ]);
 
-    return NextResponse.json({
+    return json({
       exists: true,
       outlets: outlets ?? 0,
       submissions: submissions ?? 0,
@@ -43,14 +43,14 @@ export async function GET() {
       })),
     });
   } catch (e: any) {
-    return NextResponse.json({ exists: false, error: e?.message }, { status: 500 });
+    return json({ exists: false, error: e?.message }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   const expected = process.env.SETUP_PASSWORD;
   if (!expected) {
-    return NextResponse.json(
+    return json(
       { error: 'SETUP_PASSWORD is not configured on the server.' },
       { status: 500 }
     );
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
 
   const { password, reset } = await request.json().catch(() => ({}));
   if (!safeEqual(String(password ?? ''), expected)) {
-    return NextResponse.json({ error: 'Wrong setup password.' }, { status: 401 });
+    return json({ error: 'Wrong setup password.' }, { status: 401 });
   }
 
   try {
@@ -66,14 +66,14 @@ export async function POST(request: Request) {
     await ensurePhotoBucket(db);
     const result = await buildDemo(db, { reset: Boolean(reset) });
     if ('alreadyExists' in result) {
-      return NextResponse.json({
+      return json({
         ok: true, alreadyExists: true,
         message: 'Demo data is already set up. Use "Rebuild" to start fresh.',
       });
     }
-    return NextResponse.json({ ok: true, result });
+    return json({ ok: true, result });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Seeding failed.' }, { status: 500 });
+    return json({ error: e?.message ?? 'Seeding failed.' }, { status: 500 });
   }
 }
 

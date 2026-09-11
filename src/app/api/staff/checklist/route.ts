@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { json } from '@/lib/no-store';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { readSession } from '@/lib/session';
 import { ensureRuns, refreshLocks, unlockableRoleNames, type ItemView, type RunView } from '@/lib/checklist';
@@ -16,21 +16,21 @@ export const dynamic = 'force-dynamic';
 // session — never from anything the caller supplied.
 export async function GET() {
   const session = await readSession();
-  if (!session) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
-  if (!session.shiftId) return NextResponse.json({ error: 'No shift selected.' }, { status: 400 });
+  if (!session) return json({ error: 'Not signed in.' }, { status: 401 });
+  if (!session.shiftId) return json({ error: 'No shift selected.' }, { status: 400 });
 
   const db = createAdminClient();
 
   const { data: outlet } = await db
     .from('outlets').select('id, org_id, name, timezone')
     .eq('id', session.outletId).single();
-  if (!outlet) return NextResponse.json({ error: 'Outlet not found.' }, { status: 404 });
+  if (!outlet) return json({ error: 'Outlet not found.' }, { status: 404 });
 
   const { data: org } = await db
     .from('organisations')
     .select('id, overdue_grace_minutes, unlock_escalation_minutes, default_unlock_window_minutes')
     .eq('id', outlet.org_id).single();
-  if (!org) return NextResponse.json({ error: 'Organisation not found.' }, { status: 404 });
+  if (!org) return json({ error: 'Organisation not found.' }, { status: 404 });
 
   const date = todayIn(outlet.timezone);
   await ensureRuns(db, outlet, date);
@@ -52,7 +52,7 @@ export async function GET() {
 
   const runIds = (runs ?? []).map((r) => r.id);
   if (runIds.length === 0) {
-    return NextResponse.json({
+    return json({
       outlet: outlet.name, date, timezone: outlet.timezone,
       staff: { name: session.name, role: myRole?.name },
       runs: [] as RunView[],
@@ -137,7 +137,7 @@ export async function GET() {
     };
   });
 
-  return NextResponse.json({
+  return json({
     outlet: outlet.name, date, timezone: outlet.timezone,
     staff: { name: session.name, role: myRole?.name },
     runs: result,

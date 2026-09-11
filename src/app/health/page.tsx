@@ -11,7 +11,7 @@ export default function HealthPage() {
   } | null>(null);
 
   useEffect(() => {
-    fetch('/api/health')
+    fetch('/api/health', { cache: 'no-store' })
       .then((r) => r.json())
       .then(setData)
       .catch(() => setData({

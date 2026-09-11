@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { json } from '@/lib/no-store';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { readSession } from '@/lib/session';
 import { PHOTO_BUCKET, photoPath } from '@/lib/storage';
@@ -19,7 +19,7 @@ export const runtime = 'nodejs';
 // this route.
 export async function POST(request: Request) {
   const session = await readSession();
-  if (!session) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
+  if (!session) return json({ error: 'Not signed in.' }, { status: 401 });
 
   const form = await request.formData();
   const submissionId = String(form.get('submissionId') ?? '');
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   const photo = form.get('photo') as File | null;
 
   if (!isUuid(submissionId) || !isUuid(runId) || !isUuid(itemId)) {
-    return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
+    return json({ error: 'Invalid request.' }, { status: 400 });
   }
 
   const db = createAdminClient();
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   // again. A retry after a dropped connection must not double-submit.
   const { data: existing } = await db
     .from('submissions').select('id').eq('id', submissionId).maybeSingle();
-  if (existing) return NextResponse.json({ ok: true, duplicate: true });
+  if (existing) return json({ ok: true, duplicate: true });
 
   // Confirm the run belongs to this outlet. The session decides the outlet,
   // never the request body.
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     .eq('id', runId)
     .eq('outlet_id', session.outletId)
     .maybeSingle();
-  if (!run) return NextResponse.json({ error: 'Checklist not found.' }, { status: 404 });
+  if (!run) return json({ error: 'Checklist not found.' }, { status: 404 });
 
   const { data: item } = await db
     .from('checklist_items')
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     .eq('id', itemId)
     .eq('template_id', run.template_id)
     .maybeSingle();
-  if (!item) return NextResponse.json({ error: 'Task not found.' }, { status: 404 });
+  if (!item) return json({ error: 'Task not found.' }, { status: 404 });
 
   // A frozen item cannot be completed until a manager unlocks it, and an
   // expired unlock window is the same as frozen. This is the whole point of
@@ -71,14 +71,14 @@ export async function POST(request: Request) {
 
   const now = new Date();
   if (lock && lock.state === 'locked') {
-    return NextResponse.json(
+    return json(
       { error: 'This task is locked. A manager needs to unlock it first.' },
       { status: 423 }
     );
   }
   if (lock && lock.state === 'unlocked' && lock.unlock_expires_at &&
       new Date(lock.unlock_expires_at) <= now) {
-    return NextResponse.json(
+    return json(
       { error: 'The unlock window has expired. Ask a manager to reopen it.' },
       { status: 423 }
     );
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
   if (item.proof === 'number') {
     if (rawValue === null || rawValue === '' || Number.isNaN(Number(rawValue))) {
       if (item.proof_required) {
-        return NextResponse.json({ error: 'A reading is required.' }, { status: 400 });
+        return json({ error: 'A reading is required.' }, { status: 400 });
       }
     } else {
       valueNumber = Number(rawValue);
@@ -103,12 +103,12 @@ export async function POST(request: Request) {
   } else if (item.proof === 'text') {
     valueText = (rawValue ?? '').trim() || null;
     if (item.proof_required && !valueText) {
-      return NextResponse.json({ error: 'A note is required.' }, { status: 400 });
+      return json({ error: 'A note is required.' }, { status: 400 });
     }
   }
 
   if (item.proof === 'photo' && item.proof_required && !photo) {
-    return NextResponse.json({ error: 'A photo is required.' }, { status: 400 });
+    return json({ error: 'A photo is required.' }, { status: 400 });
   }
 
   // Photo freshness. This raises the cost of submitting an old picture from
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
     const captured = new Date(capturedAt);
     const ageMinutes = (now.getTime() - captured.getTime()) / 60_000;
     if (ageMinutes > 15 || ageMinutes < -5) {
-      return NextResponse.json(
+      return json(
         { error: 'That photo is not recent. Please take a new one now.' },
         { status: 400 }
       );
@@ -131,7 +131,7 @@ export async function POST(request: Request) {
   let storedPath: string | null = null;
   if (photo && photo.size > 0) {
     if (photo.size > 8 * 1024 * 1024) {
-      return NextResponse.json({ error: 'Photo too large.' }, { status: 413 });
+      return json({ error: 'Photo too large.' }, { status: 413 });
     }
     storedPath = photoPath({
       orgId: run.org_id, outletId: run.outlet_id, runDate: run.run_date,
@@ -141,7 +141,7 @@ export async function POST(request: Request) {
       .from(PHOTO_BUCKET)
       .upload(storedPath, photo, { contentType: 'image/jpeg', upsert: true });
     if (uploadError) {
-      return NextResponse.json({ error: `Photo upload failed: ${uploadError.message}` }, { status: 500 });
+      return json({ error: `Photo upload failed: ${uploadError.message}` }, { status: 500 });
     }
   }
 
@@ -170,9 +170,9 @@ export async function POST(request: Request) {
     // the race. That is correct behaviour, and the message should say so
     // plainly rather than looking like a failure.
     if (insertError.code === '23505') {
-      return NextResponse.json({ ok: true, alreadyDone: true });
+      return json({ ok: true, alreadyDone: true });
     }
-    return NextResponse.json({ error: insertError.message }, { status: 500 });
+    return json({ error: insertError.message }, { status: 500 });
   }
 
   if (lock) {
@@ -200,7 +200,7 @@ export async function POST(request: Request) {
     });
   }
 
-  return NextResponse.json({ ok: true, outOfBounds, wasLate });
+  return json({ ok: true, outOfBounds, wasLate });
 }
 
 // Notify everyone holding the role this person reports to.

@@ -26,7 +26,7 @@ export default function SetupPage() {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/seed');
+      const res = await fetch('/api/admin/seed', { cache: 'no-store' });
       setStatus(await res.json());
     } catch {
       setStatus(null);

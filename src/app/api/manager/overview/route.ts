@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { json } from '@/lib/no-store';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { currentManager } from '@/lib/supabase/server';
 import { ensureRuns, refreshLocks } from '@/lib/checklist';
@@ -12,9 +12,9 @@ export const dynamic = 'force-dynamic';
 // each outlet is tracking today.
 export async function GET(request: Request) {
   const manager = await currentManager();
-  if (!manager) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
+  if (!manager) return json({ error: 'Not signed in.' }, { status: 401 });
   if (!manager.canReview && !manager.canUnlock) {
-    return NextResponse.json({ error: 'Your role has no review access.' }, { status: 403 });
+    return json({ error: 'Your role has no review access.' }, { status: 403 });
   }
 
   // Reads are already confined to the manager's organisation by the row-level
@@ -52,7 +52,7 @@ export async function GET(request: Request) {
   const runById = new Map((runs ?? []).map((r) => [r.id, r]));
 
   const empty = { locked: [], review: [], alerts: [], outlets: [], date };
-  if (!runIds.length) return NextResponse.json(empty);
+  if (!runIds.length) return json(empty);
 
   const [{ data: items }, { data: submissions }, { data: locks }] = await Promise.all([
     db.from('checklist_items').select('*').eq('org_id', manager.orgId).eq('is_active', true),
@@ -138,7 +138,7 @@ export async function GET(request: Request) {
     };
   });
 
-  return NextResponse.json({
+  return json({
     date,
     manager: {
       name: manager.name, role: manager.roleName,
