@@ -27,6 +27,7 @@ searchable and exportable later for audit — photo, value, comment, who, when.
 | Storage | Supabase (Postgres + Storage) behind a swappable `StorageService` interface |
 | Camera | Native camera app via `capture` attribute, not in-browser capture |
 | Escalation | Notify manager on overdue → auto-escalate one level up after grace period |
+| Lockout | Missed item freezes (only that item); M1 unlocks with comment; after a configurable window M2 gains unlock rights too |
 | Review | Per-item configurable: auto-approve vs manager approval required |
 | Notifications | In-app + web push + email; Google Sheets append for logs |
 | Reporting | Live dashboard + exportable audit reports (PDF/Excel) |
@@ -62,7 +63,10 @@ searchable and exportable later for audit — photo, value, comment, who, when.
 
 ```
 organisations
-  id, name, created_at, settings (json)
+  id, name, created_at,
+  default_unlock_window_minutes,      -- how long an unlock reopens an item
+  unlock_escalation_minutes,          -- before the next level gains unlock rights
+  settings (json)
 
 outlets
   id, org_id, name, timezone, address
@@ -101,12 +105,23 @@ submissions
   id (client-generated uuid),        -- see §7, enables offline + retry safety
   run_id, checklist_item_id, user_id, outlet_id, org_id,
   value_number, value_text, photo_url, comment,
-  status (submitted|approved|rejected|overdue),
+  status (submitted|approved|rejected|overdue|completed_by_manager|waived),
   submitted_at, device_captured_at, reviewed_at, reviewed_by, review_note
 
 reporting_chain
   id, org_id, role_id, reports_to_role_id (or reports_to_user_id),
   escalation_after_minutes
+
+item_locks                -- current lock state of one item in one run
+  id, run_id, checklist_item_id, org_id, outlet_id,
+  state (locked|unlocked|resolved),
+  locked_at, escalation_level (0 = M1 may unlock, 1 = M2 also may, ...),
+  unlocked_by, unlocked_at, unlock_expires_at, unlock_comment
+
+lock_events               -- immutable audit trail; append-only, never updated
+  id, run_id, checklist_item_id, org_id,
+  event (frozen|unlocked|refrozen|escalated|manager_completed|waived),
+  actor_user_id (null for system events), comment, created_at
 
 notifications
   id, org_id, user_id, type, payload (json), read_at, sent_channels, created_at
@@ -151,6 +166,55 @@ has passed with no submission, marks them overdue, and notifies the direct
 manager. If still unresolved after `escalation_after_minutes`, it climbs one
 level up the chain and notifies again. Escalation stops at the top role or on
 completion.
+
+### 5.4a Lockout, unlock and override
+
+This is the accountability mechanism, and the most behaviourally sensitive
+feature in the app. Rules:
+
+**Freeze.** When an item's due time passes with no submission, that item — and
+only that item — locks. The rest of the checklist stays open, so a staff member
+is never blocked from doing their remaining work by one late task. A locked
+item shows who can unlock it and displays a countdown to the next escalation.
+
+**Unlock by M1.** The submitter's direct manager (the next level up the
+`reporting_chain`) can unlock it. A comment is mandatory — an unlock with no
+stated reason is not recorded. Unlocking reopens the item for a limited window
+set by the manager at unlock time (default 30 minutes, organisation-configurable
+range). When the window expires without a submission, the item re-freezes and
+the escalation clock resumes. This keeps the deadline meaningful; an unlock is
+a second chance, not an amnesty.
+
+**Escalation to M2.** If a frozen item is still unresolved after
+`unlock_escalation_minutes` (configurable per organisation, default 60), the
+next level up gains unlock rights as well. M1 does not lose the ability to
+unlock — M2 is added, not substituted. The point is to create upward visibility
+and pressure, not to punish a manager who was busy on the floor. Escalation
+continues one level at a time to the top of the chain.
+
+**Manager override.** A manager with unlock rights may instead resolve the item
+directly, in one of two ways, both requiring a comment:
+
+- *Manager completion* — the manager completes the task themselves, supplying
+  whatever proof the item requires. Recorded as `completed_by_manager`, stored
+  and reported distinctly from a staff completion so it never inflates a staff
+  member's completion rate.
+- *Waived* — the task genuinely did not apply today (delivery never arrived,
+  outlet closed early, equipment out of service). Recorded as `waived` and
+  reported as waived, never counted as completed. Waivers are surfaced
+  prominently on the owner dashboard, because a manager who waives everything
+  is exactly the failure mode this app exists to expose.
+
+**Audit.** Every freeze, unlock, re-freeze, escalation, override and waiver is
+an immutable row in `lock_events` with actor, timestamp, and comment. Nothing
+in this flow is editable or deletable after the fact; a correction is a new
+event, not a rewrite. This is what makes the app defensible in a food-safety
+inspection or a staff dispute.
+
+**Deliberate limitation.** A determined manager can unlock and complete
+everything themselves. No software prevents that. What the app guarantees is
+that doing so is fully visible to the level above them, which is the realistic
+control.
 
 ### 5.5 Dashboard and audit reports
 Owner/manager dashboard: today's completion percentage per outlet, what is
