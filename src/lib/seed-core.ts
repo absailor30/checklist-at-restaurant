@@ -4,17 +4,18 @@ import { SEED_ROLES, SEED_SHIFTS, SEED_TEMPLATES } from '@/lib/checklist-content
 
 // The demo builder, shared by the command-line script and the /setup page.
 //
-// It exists as a web page as well as a script because the person running this
-// may not have a development environment at all — they should be able to set
-// up a demo from a phone browser.
+// Rows are generated in memory with client-side ids and written in batches,
+// one request per table rather than one per row. An earlier version inserted
+// each row individually and read the id back: around 1,400 sequential network
+// round-trips, which took minutes and was killed by the serverless request
+// timeout long before it finished. Batching turns that into roughly twenty
+// requests.
 //
 // Only rows belonging to the demo organisation are touched. Real customer
 // organisations (is_demo = false) are never deleted here.
 
 export const DEMO_ORG = 'Spice Garden Restaurants';
 export const DEMO_PIN = '1234';
-// Demo manager accounts. Real deployments create these through proper signup;
-// these exist so the manager screen can be demonstrated immediately.
 export const DEMO_MANAGER_PASSWORD = 'demo-manager-2026';
 export const DEMO_EMAIL_DOMAIN = 'spicegarden.demo';
 const HISTORY_DAYS = 14;
@@ -49,6 +50,8 @@ export interface SeedResult {
   managerPassword: string;
 }
 
+const uuid = () => crypto.randomUUID();
+
 export async function buildDemo(
   db: SupabaseClient,
   opts: { reset: boolean }
@@ -65,176 +68,185 @@ export async function buildDemo(
     .from('organisations').select('id').eq('name', DEMO_ORG).maybeSingle();
   if (already) return { alreadyExists: true };
 
-  const insert = async (table: string, row: Record<string, unknown>) => {
-    const { data, error } = await db.from(table).insert(row).select().single();
-    if (error) throw new Error(`${table}: ${error.message}`);
-    return data;
-  };
+  // ---------------------------------------------------------------- build
 
-  const org = await insert('organisations', {
-    name: DEMO_ORG, is_demo: true,
+  const orgId = uuid();
+  const organisation = {
+    id: orgId, name: DEMO_ORG, is_demo: true,
     default_unlock_window_minutes: 30,
     unlock_escalation_minutes: 60,
     overdue_grace_minutes: 15,
+  };
+
+  const roleRows = SEED_ROLES.map((r) => ({
+    id: uuid(), org_id: orgId, name: r.name, level: r.level,
+    can_review: r.canReview, can_unlock: r.canUnlock, can_manage: r.canManage,
+  }));
+  const roleByName = new Map(roleRows.map((r) => [r.name, r]));
+
+  const ordered = [...roleRows].sort((a, b) => a.level - b.level);
+  const chainRows = ordered.flatMap((r) => {
+    const up = ordered.find((o) => o.level > r.level);
+    return up ? [{
+      id: uuid(), org_id: orgId, role_id: r.id,
+      reports_to_role_id: up.id, escalation_after_minutes: 60,
+    }] : [];
   });
 
-  const roles: Record<string, any> = {};
-  for (const r of SEED_ROLES) {
-    roles[r.name] = await insert('roles', {
-      org_id: org.id, name: r.name, level: r.level,
-      can_review: r.canReview, can_unlock: r.canUnlock, can_manage: r.canManage,
-    });
-  }
+  const outletRows = OUTLETS.map((o) => ({
+    id: uuid(), org_id: orgId, name: o.name, address: o.address,
+    timezone: 'Asia/Kolkata',
+  }));
 
-  const ordered = [...SEED_ROLES].sort((a, b) => a.level - b.level);
-  for (const r of ordered) {
-    const up = ordered.find((o) => o.level > r.level);
-    if (!up) continue;
-    await insert('reporting_chain', {
-      org_id: org.id, role_id: roles[r.name].id,
-      reports_to_role_id: roles[up.name].id, escalation_after_minutes: 60,
-    });
-  }
-
-  const outlets: any[] = [];
-  for (const o of OUTLETS) {
-    outlets.push(await insert('outlets', {
-      org_id: org.id, name: o.name, address: o.address, timezone: 'Asia/Kolkata',
-    }));
-  }
-
+  // Manager accounts must exist in Supabase Auth before the users rows can
+  // reference them. There are only a handful, so these stay sequential.
   const pinHash = await bcrypt.hash(DEMO_PIN, 10);
-  const users: any[] = [];
   const managerLogins: { name: string; role: string; email: string }[] = [];
+  const userRows: any[] = [];
+  const userOutletRows: { user_id: string; outlet_id: string }[] = [];
 
   for (const s of STAFF) {
     const roleDef = SEED_ROLES.find((r) => r.name === s.role)!;
-
-    // Anyone who can review or unlock needs a real account with a password.
-    // An approval trail signed by a shared four-digit PIN would not be worth
-    // anything in a dispute or an inspection.
     let authUserId: string | null = null;
     let email: string | null = null;
+
+    // Anyone who can review or unlock needs a real account with a password.
+    // An approval trail signed by a shared four-digit PIN is worthless in a
+    // dispute or an inspection.
     if (roleDef.canReview || roleDef.canUnlock) {
       email = `${s.name.split(' ')[0].toLowerCase()}@${DEMO_EMAIL_DOMAIN}`;
-      const { data: created, error: authError } = await db.auth.admin.createUser({
-        email,
-        password: DEMO_MANAGER_PASSWORD,
-        email_confirm: true,
-        user_metadata: { name: s.name },
+      const { data: created, error } = await db.auth.admin.createUser({
+        email, password: DEMO_MANAGER_PASSWORD,
+        email_confirm: true, user_metadata: { name: s.name },
       });
-      if (authError && !/already/i.test(authError.message)) {
-        throw new Error(`auth account for ${email}: ${authError.message}`);
+      if (error && !/already|registered/i.test(error.message)) {
+        throw new Error(`auth account for ${email}: ${error.message}`);
       }
       authUserId = created?.user?.id ?? await findAuthUser(db, email);
       managerLogins.push({ name: s.name, role: s.role, email });
     }
 
-    const u = await insert('users', {
-      org_id: org.id, role_id: roles[s.role].id, name: s.name,
-      email, auth_user_id: authUserId,
+    const userId = uuid();
+    userRows.push({
+      id: userId, org_id: orgId, role_id: roleByName.get(s.role)!.id,
+      name: s.name, email, auth_user_id: authUserId,
       pin_hash: pinHash, pin_set_at: new Date().toISOString(),
     });
-    for (const o of s.outlet === null ? outlets : [outlets[s.outlet]]) {
-      await db.from('user_outlets').insert({ user_id: u.id, outlet_id: o.id });
+    for (const o of s.outlet === null ? outletRows : [outletRows[s.outlet]]) {
+      userOutletRows.push({ user_id: userId, outlet_id: o.id });
     }
-    users.push({ ...u, role: s.role, outletIndex: s.outlet });
   }
 
-  const templates: any[] = [];
-  for (const outlet of outlets) {
+  const shiftRows: any[] = [];
+  const templateRows: any[] = [];
+  const itemRows: any[] = [];
+  const templateIndex: {
+    tplId: string; items: any[]; outlet: any; shift: any; role: string;
+  }[] = [];
+
+  for (const outlet of outletRows) {
     const shifts: Record<string, any> = {};
     for (const sh of SEED_SHIFTS) {
-      shifts[sh.name] = await insert('shifts', {
-        org_id: org.id, outlet_id: outlet.id, name: sh.name,
+      const row = {
+        id: uuid(), org_id: orgId, outlet_id: outlet.id, name: sh.name,
         start_time: sh.start, end_time: sh.end, sort_order: sh.sort,
-      });
+      };
+      shifts[sh.name] = row;
+      shiftRows.push(row);
     }
+
     for (const t of SEED_TEMPLATES) {
-      const tpl = await insert('checklist_templates', {
-        org_id: org.id, outlet_id: outlet.id,
-        role_id: roles[t.role].id, shift_id: shifts[t.shift].id, title: t.title,
+      const tplId = uuid();
+      templateRows.push({
+        id: tplId, org_id: orgId, outlet_id: outlet.id,
+        role_id: roleByName.get(t.role)!.id, shift_id: shifts[t.shift].id,
+        title: t.title,
       });
-      const items: any[] = [];
-      for (const [i, item] of t.items.entries()) {
-        items.push(await insert('checklist_items', {
-          org_id: org.id, template_id: tpl.id, title: item.title,
-          description: item.description ?? null, sort_order: i,
-          proof: item.proof, proof_required: item.proofRequired ?? false,
-          requires_approval: item.requiresApproval ?? false,
-          due_offset_minutes: item.dueOffsetMinutes,
-          min_value: item.min ?? null, max_value: item.max ?? null,
-          unit: item.unit ?? null,
-        }));
-      }
-      templates.push({ tpl, items, outlet, shift: shifts[t.shift], role: t.role });
+
+      const items = t.items.map((item, i) => ({
+        id: uuid(), org_id: orgId, template_id: tplId, title: item.title,
+        description: item.description ?? null, sort_order: i,
+        proof: item.proof, proof_required: item.proofRequired ?? false,
+        requires_approval: item.requiresApproval ?? false,
+        due_offset_minutes: item.dueOffsetMinutes,
+        min_value: item.min ?? null, max_value: item.max ?? null,
+        unit: item.unit ?? null,
+      }));
+      itemRows.push(...items);
+      templateIndex.push({ tplId, items, outlet, shift: shifts[t.shift], role: t.role });
     }
   }
 
-  let submissions = 0, frozen = 0;
+  const runRows: any[] = [];
+  const submissionRows: any[] = [];
+  const lockRows: any[] = [];
+  const eventRows: any[] = [];
+  const now = Date.now();
+
   for (let d = HISTORY_DAYS; d >= 0; d--) {
     const date = isoDate(d);
     const today = d === 0;
 
-    for (const { tpl, items, outlet, shift, role } of templates) {
+    for (const { tplId, items, outlet, shift, role } of templateIndex) {
       const startsAt = at(date, String(shift.start_time).slice(0, 5));
       const endsAt = at(date, String(shift.end_time).slice(0, 5));
-      if (today && new Date(startsAt) > new Date()) continue;
+      if (today && new Date(startsAt).getTime() > now) continue;
 
-      const run = await insert('checklist_runs', {
-        org_id: org.id, outlet_id: outlet.id, template_id: tpl.id,
-        shift_id: shift.id, run_date: date,
-        starts_at: startsAt, ends_at: endsAt, status: 'in_progress',
+      const runId = uuid();
+      const pool = userRows.filter((u) => {
+        const r = roleRows.find((x) => x.id === u.role_id);
+        return r?.name === role;
       });
-
-      const pool = users.filter(
-        (u) => u.role === role &&
-               (u.outletIndex === null || outlets[u.outletIndex].id === outlet.id)
-      );
       if (!pool.length) continue;
-      const who = pool[d % pool.length];
-      const manager = users.find(
-        (u) => u.role === 'Shift Manager' &&
-               (u.outletIndex === null || outlets[u.outletIndex].id === outlet.id)
+
+      const atOutlet = pool.filter((u) =>
+        userOutletRows.some((uo) => uo.user_id === u.id && uo.outlet_id === outlet.id)
       );
+      if (!atOutlet.length) continue;
+      const who = atOutlet[d % atOutlet.length];
+
+      const managers = userRows.filter((u) => {
+        const r = roleRows.find((x) => x.id === u.role_id);
+        return r?.name === 'Shift Manager' &&
+               userOutletRows.some((uo) => uo.user_id === u.id && uo.outlet_id === outlet.id);
+      });
+      const manager = managers[0];
 
       let done = 0;
       for (const item of items) {
         const dueAt = addMin(startsAt, item.due_offset_minutes);
-        if (today && new Date(dueAt) > new Date()) continue;
+        if (today && new Date(dueAt).getTime() > now) continue;
 
         // Older days look better than recent ones so the dashboard shows a
         // trend. A demo where everything is green proves nothing.
-        const missRate = d > 7 ? 0.06 : 0.14;
-        const missed = rand(`${run.id}${item.id}`) < missRate;
+        const missed = rand(`${runId}${item.id}`) < (d > 7 ? 0.06 : 0.14);
 
         if (missed) {
-          await insert('item_locks', {
-            org_id: org.id, outlet_id: outlet.id, run_id: run.id,
+          lockRows.push({
+            id: uuid(), org_id: orgId, outlet_id: outlet.id, run_id: runId,
             checklist_item_id: item.id,
             state: today ? 'locked' : 'resolved',
-            locked_at: dueAt,
-            escalates_at: addMin(dueAt, 60),
+            locked_at: dueAt, escalates_at: addMin(dueAt, 60),
             escalation_level: today ? 0 : 1,
             resolved_at: today ? null : addMin(dueAt, 75),
           });
-          await db.from('lock_events').insert({
-            org_id: org.id, run_id: run.id, checklist_item_id: item.id,
+          eventRows.push({
+            id: uuid(), org_id: orgId, run_id: runId, checklist_item_id: item.id,
             event: 'frozen', comment: 'Due time passed with no submission.',
             created_at: dueAt,
           });
-          frozen++;
           if (today || !manager) continue;
 
-          await db.from('lock_events').insert({
-            org_id: org.id, run_id: run.id, checklist_item_id: item.id,
+          // Historic misses were unlocked and completed late, which is the
+          // normal path and the one managers will recognise.
+          eventRows.push({
+            id: uuid(), org_id: orgId, run_id: runId, checklist_item_id: item.id,
             event: 'unlocked', actor_user_id: manager.id,
             comment: 'Rush during service, staff reassigned. Reopened for 30 minutes.',
             created_at: addMin(dueAt, 45),
           });
-          await insert('submissions', {
-            id: crypto.randomUUID(),
-            org_id: org.id, outlet_id: outlet.id, run_id: run.id,
+          submissionRows.push({
+            id: uuid(), org_id: orgId, outlet_id: outlet.id, run_id: runId,
             checklist_item_id: item.id, user_id: who.id,
             ...proofValue(item),
             status: item.requires_approval ? 'approved' : 'submitted',
@@ -242,33 +254,64 @@ export async function buildDemo(
             reviewed_by: item.requires_approval ? manager.id : null,
             reviewed_at: item.requires_approval ? addMin(dueAt, 70) : null,
           });
-          submissions++; done++;
+          done++;
           continue;
         }
 
-        const values = proofValue(item);
-        await insert('submissions', {
-          id: crypto.randomUUID(),
-          org_id: org.id, outlet_id: outlet.id, run_id: run.id,
+        submissionRows.push({
+          id: uuid(), org_id: orgId, outlet_id: outlet.id, run_id: runId,
           checklist_item_id: item.id, user_id: who.id,
-          ...values,
+          ...proofValue(item),
           status: item.requires_approval ? 'approved' : 'submitted',
           submitted_at: addMin(dueAt, -5),
         });
-        submissions++; done++;
+        done++;
       }
 
-      if (!today && done === items.length) {
-        await db.from('checklist_runs').update({ status: 'complete' }).eq('id', run.id);
-      }
+      runRows.push({
+        id: runId, org_id: orgId, outlet_id: outlet.id, template_id: tplId,
+        shift_id: shift.id, run_date: date,
+        starts_at: startsAt, ends_at: endsAt,
+        status: !today && done === items.length ? 'complete' : 'in_progress',
+      });
     }
   }
 
+  // ---------------------------------------------------------------- write
+  // Order matters: each table references the ones before it.
+
+  await insertAll(db, 'organisations', [organisation]);
+  await insertAll(db, 'roles', roleRows);
+  await insertAll(db, 'reporting_chain', chainRows);
+  await insertAll(db, 'outlets', outletRows);
+  await insertAll(db, 'users', userRows);
+  await insertAll(db, 'user_outlets', userOutletRows);
+  await insertAll(db, 'shifts', shiftRows);
+  await insertAll(db, 'checklist_templates', templateRows);
+  await insertAll(db, 'checklist_items', itemRows);
+  await insertAll(db, 'checklist_runs', runRows);
+  await insertAll(db, 'submissions', submissionRows);
+  await insertAll(db, 'item_locks', lockRows);
+  await insertAll(db, 'lock_events', eventRows);
+
   return {
-    outlets: outlets.length, staff: users.length, templates: templates.length,
-    submissions, frozen, pin: DEMO_PIN,
-    managers: managerLogins, managerPassword: DEMO_MANAGER_PASSWORD,
+    outlets: outletRows.length,
+    staff: userRows.length,
+    templates: templateRows.length,
+    submissions: submissionRows.length,
+    frozen: lockRows.length,
+    pin: DEMO_PIN,
+    managers: managerLogins,
+    managerPassword: DEMO_MANAGER_PASSWORD,
   };
+}
+
+// Chunked so a single request never carries an unreasonable payload.
+async function insertAll(db: SupabaseClient, table: string, rows: any[], chunk = 500) {
+  for (let i = 0; i < rows.length; i += chunk) {
+    const { error } = await db.from(table).insert(rows.slice(i, i + chunk));
+    if (error) throw new Error(`${table}: ${error.message}`);
+  }
 }
 
 // A rebuild reuses auth accounts that already exist, since deleting the

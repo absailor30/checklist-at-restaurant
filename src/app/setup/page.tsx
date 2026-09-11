@@ -40,7 +40,10 @@ export default function SetupPage() {
         );
       }
     } catch {
-      setError('Could not reach the server.');
+      setError(
+        'The request did not complete. If the demo was partly created, use ' +
+        'Rebuild to start cleanly rather than Create.'
+      );
     } finally {
       setBusy(false);
     }
@@ -56,6 +59,11 @@ export default function SetupPage() {
 
       {error && <div className="banner error">{error}</div>}
       {message && <div className="banner info">{message}</div>}
+      {busy && (
+        <div className="banner info">
+          Writing around 3,000 rows. This takes a few seconds — do not close the page.
+        </div>
+      )}
 
       <div className="card">
         <label>Setup password</label>
@@ -71,7 +79,7 @@ export default function SetupPage() {
             Rebuild
           </button>
           <button className="btn-primary" disabled={busy || !password} onClick={() => run(false)}>
-            {busy ? 'Working…' : 'Create demo'}
+            {busy ? 'Building…' : 'Create demo'}
           </button>
         </div>
       </div>
