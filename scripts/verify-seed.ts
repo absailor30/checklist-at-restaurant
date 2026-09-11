@@ -2,32 +2,78 @@
  * Verifies the demo builder against a real PostgreSQL database.
  *
  * Supabase's API is not reachable from every environment, so this substitutes
- * a stand-in client that captures the rows buildDemo produces and writes them
- * out as SQL. Running that SQL against the real schema exercises every foreign
- * key, enum value and not-null constraint — which is where seed bugs actually
- * live.
+ * a stand-in client backed by an in-memory store. It captures the rows
+ * buildDemo produces, answers the counts and lookups the builder performs, and
+ * emits SQL. Running that SQL against the real schema exercises every foreign
+ * key, enum value and not-null constraint — which is where seed bugs live.
  */
 import { buildDemo } from '../src/lib/seed-core';
 
-const captured: { table: string; rows: any[] }[] = [];
+const store = new Map<string, any[]>();
+const order: { table: string; rows: any[] }[] = [];
 
-const fake: any = {
-  from(table: string) {
-    return {
-      select: () => ({
-        eq: () => ({
-          eq: () => Promise.resolve({ data: [] }),
-          maybeSingle: () => Promise.resolve({ data: null }),
-        }),
-        maybeSingle: () => Promise.resolve({ data: null }),
-      }),
-      insert: (rows: any) => {
-        captured.push({ table, rows: Array.isArray(rows) ? rows : [rows] });
+function rowsOf(table: string): any[] {
+  return store.get(table) ?? [];
+}
+
+/** Minimal query builder: enough of the shape the seeder actually uses. */
+function query(table: string) {
+  const filters: { col: string; value: unknown }[] = [];
+
+  const api: any = {
+    select: (_cols?: string, opts?: { count?: string; head?: boolean }) => {
+      api._counting = Boolean(opts?.count);
+      return api;
+    },
+    eq: (col: string, value: unknown) => { filters.push({ col, value }); return api; },
+    not: () => api,
+    maybeSingle: () => Promise.resolve({ data: matches()[0] ?? null }),
+    single: () => Promise.resolve({ data: matches()[0] ?? null }),
+    then: (resolve: (v: any) => void) => resolve(result()),
+    insert: (rows: any) => {
+      const list = Array.isArray(rows) ? rows : [rows];
+      store.set(table, [...rowsOf(table), ...list]);
+      order.push({ table, rows: list });
+      return Promise.resolve({ error: null });
+    },
+    delete: () => ({
+      eq: (col: string, value: unknown) => {
+        store.set(table, rowsOf(table).filter((r) => r[col] !== value));
+        // Deleting an organisation cascades in the real schema. Most tables
+        // carry org_id directly; user_outlets does not, and cascades through
+        // users, so it has to be handled by membership.
+        if (table === 'organisations') {
+          const goneUsers = new Set(
+            rowsOf('users').filter((r) => r.org_id === value).map((r) => r.id)
+          );
+          for (const [t, rows] of store) {
+            if (t === 'organisations') continue;
+            if (t === 'user_outlets') {
+              store.set(t, rows.filter((r) => !goneUsers.has(r.user_id)));
+            } else {
+              store.set(t, rows.filter((r) => r.org_id !== value));
+            }
+          }
+        }
         return Promise.resolve({ error: null });
       },
-      delete: () => ({ eq: () => Promise.resolve({ error: null }) }),
-    };
-  },
+    }),
+  };
+
+  function matches() {
+    return rowsOf(table).filter((r) => filters.every((f) => r[f.col] === f.value));
+  }
+  function result() {
+    const rows = matches();
+    return api._counting
+      ? { count: rows.length, data: rows, error: null }
+      : { data: rows, error: null };
+  }
+  return api;
+}
+
+const fake: any = {
+  from: (table: string) => query(table),
   auth: {
     admin: {
       createUser: ({ email }: { email: string }) =>
@@ -46,12 +92,25 @@ function sqlValue(v: unknown): string {
   return `'${String(v).replace(/'/g, "''")}'`;
 }
 
-buildDemo(fake, { reset: false }).then((result) => {
+async function main() {
+  // Run twice: the second pass proves a rebuild over existing data works,
+  // which is the path that actually failed in production.
+  const first = await buildDemo(fake, { reset: false });
+  process.stderr.write(`first run: ${summary(first)}\n`);
+
+  const second = await buildDemo(fake, { reset: true });
+  process.stderr.write(`rebuild:   ${summary(second)}\n`);
+
+  // Emit only the rows surviving in the store, which is what the database
+  // would hold after the rebuild.
   const lines: string[] = ['begin;'];
   let total = 0;
+  const seen = new Set<string>();
 
-  for (const { table, rows } of captured) {
-    for (const row of rows) {
+  for (const { table } of order) {
+    if (seen.has(table)) continue;
+    seen.add(table);
+    for (const row of rowsOf(table)) {
       const cols = Object.keys(row);
       lines.push(
         `insert into ${table} (${cols.map((c) => `"${c}"`).join(', ')}) values ` +
@@ -61,10 +120,14 @@ buildDemo(fake, { reset: false }).then((result) => {
     }
   }
   lines.push('commit;');
-
-  process.stderr.write(
-    `${total} rows across ${new Set(captured.map((c) => c.table)).size} tables\n` +
-    `${JSON.stringify(result)}\n`
-  );
+  process.stderr.write(`${total} rows to write\n`);
   process.stdout.write(lines.join('\n'));
-});
+}
+
+function summary(r: any): string {
+  return 'alreadyExists' in r
+    ? 'already exists'
+    : `${r.outlets} outlets, ${r.staff} staff, ${r.submissions} submissions, ${r.frozen} locked`;
+}
+
+main().catch((e) => { process.stderr.write(`${e.message}\n`); process.exit(1); });

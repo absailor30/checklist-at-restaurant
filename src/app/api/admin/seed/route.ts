@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { buildDemo } from '@/lib/seed-core';
+import { buildDemo, DEMO_ORG, DEMO_PIN, DEMO_MANAGER_PASSWORD } from '@/lib/seed-core';
 import { PHOTO_BUCKET } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
@@ -12,6 +12,41 @@ export const maxDuration = 60;
 //
 // Protected by SETUP_PASSWORD. This endpoint can delete and rebuild an entire
 // organisation, so it must never be callable by a stranger who finds the URL.
+// Current state of the demo data, so the setup page can show what actually
+// exists rather than leaving the reader to guess from the last button press.
+export async function GET() {
+  try {
+    const db = createAdminClient();
+    const { data: org } = await db
+      .from('organisations').select('id').eq('name', DEMO_ORG).maybeSingle();
+
+    if (!org) return NextResponse.json({ exists: false });
+
+    const [{ count: outlets }, { count: submissions }, { data: managers }] = await Promise.all([
+      db.from('outlets').select('*', { count: 'exact', head: true }).eq('org_id', org.id),
+      db.from('submissions').select('*', { count: 'exact', head: true }).eq('org_id', org.id),
+      db.from('users')
+        .select('name, email, roles!inner(name, can_review)')
+        .eq('org_id', org.id).not('email', 'is', null),
+    ]);
+
+    return NextResponse.json({
+      exists: true,
+      outlets: outlets ?? 0,
+      submissions: submissions ?? 0,
+      pin: DEMO_PIN,
+      managerPassword: DEMO_MANAGER_PASSWORD,
+      managers: (managers ?? []).map((m: any) => ({
+        name: m.name,
+        email: m.email,
+        role: (Array.isArray(m.roles) ? m.roles[0] : m.roles)?.name ?? '',
+      })),
+    });
+  } catch (e: any) {
+    return NextResponse.json({ exists: false, error: e?.message }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   const expected = process.env.SETUP_PASSWORD;
   if (!expected) {

@@ -56,17 +56,38 @@ export async function buildDemo(
   db: SupabaseClient,
   opts: { reset: boolean }
 ): Promise<SeedResult | { alreadyExists: true }> {
-  if (opts.reset) {
-    const { data: existing } = await db
-      .from('organisations').select('id').eq('name', DEMO_ORG).eq('is_demo', true);
-    for (const org of existing ?? []) {
-      await db.from('organisations').delete().eq('id', org.id);
+  const { data: existing } = await db
+    .from('organisations').select('id').eq('name', DEMO_ORG).maybeSingle();
+
+  if (existing) {
+    // An attempt that failed part way through leaves the organisation row
+    // behind with few or no children. That state blocks itself: the app sees
+    // no outlets, while a plain Create sees an organisation and skips. Treat
+    // an organisation with no outlets as incomplete and rebuild it, rather
+    // than reporting success and leaving the user stuck.
+    const { count } = await db
+      .from('outlets').select('*', { count: 'exact', head: true })
+      .eq('org_id', existing.id);
+    const incomplete = (count ?? 0) === 0;
+
+    if (!opts.reset && !incomplete) return { alreadyExists: true };
+
+    const { error: deleteError } = await db
+      .from('organisations').delete().eq('id', existing.id);
+    if (deleteError) {
+      throw new Error(
+        `Could not remove the existing demo organisation: ${deleteError.message}`
+      );
+    }
+
+    // Confirm the delete actually took effect. Every other table cascades from
+    // this row, so proceeding on a failed delete would produce duplicates.
+    const { data: stillThere } = await db
+      .from('organisations').select('id').eq('id', existing.id).maybeSingle();
+    if (stillThere) {
+      throw new Error('The existing demo organisation could not be deleted.');
     }
   }
-
-  const { data: already } = await db
-    .from('organisations').select('id').eq('name', DEMO_ORG).maybeSingle();
-  if (already) return { alreadyExists: true };
 
   // ---------------------------------------------------------------- build
 
@@ -293,6 +314,18 @@ export async function buildDemo(
   await insertAll(db, 'submissions', submissionRows);
   await insertAll(db, 'item_locks', lockRows);
   await insertAll(db, 'lock_events', eventRows);
+
+  // Read back before reporting success. Claiming the demo is ready when the
+  // outlets did not land is exactly what left the setup page and the app
+  // disagreeing about whether anything existed.
+  const { count: writtenOutlets } = await db
+    .from('outlets').select('*', { count: 'exact', head: true }).eq('org_id', orgId);
+  if ((writtenOutlets ?? 0) !== outletRows.length) {
+    throw new Error(
+      `Only ${writtenOutlets ?? 0} of ${outletRows.length} outlets were written. ` +
+      `The demo is incomplete — press Rebuild to try again.`
+    );
+  }
 
   return {
     outlets: outletRows.length,
