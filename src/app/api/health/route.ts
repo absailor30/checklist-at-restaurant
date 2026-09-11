@@ -56,6 +56,7 @@ export async function GET() {
     try {
       const { createAdminClient } = await import('@/lib/supabase/admin');
       const db = createAdminClient();
+      const started = Date.now();
 
       // Fetch the rows themselves, not just a count. A count that disagrees
       // with the rows points at the query; rows that disagree between two
@@ -73,7 +74,15 @@ export async function GET() {
             : outletError.message,
         });
       } else {
-        checks.push({ name: 'Database tables', ok: true, detail: 'Reachable' });
+        // Round-trip time is worth reporting: this app's functions and its
+        // database can end up on opposite sides of the world, and every query
+        // then pays that latency.
+        const ms = Date.now() - started;
+        checks.push({
+          name: 'Database tables',
+          ok: true,
+          detail: ms > 400 ? `Reachable, but slow (${ms}ms round trip)` : `Reachable (${ms}ms)`,
+        });
 
         // Ask for rows, not counts. An exact count is returned in the
         // Content-Range header, and a stripped or absent header reads as zero —
@@ -115,15 +124,22 @@ export async function GET() {
         });
       }
 
-      const { data: buckets, error: bucketError } = await db.storage.listBuckets();
+      // Ask the bucket directly rather than listing all buckets. listBuckets()
+      // came back empty for a bucket that provably existed, so the health page
+      // reported storage missing while photo upload worked fine. Listing one
+      // object answers the question that actually matters: can this connection
+      // reach the bucket?
+      const { error: storageError } = await db.storage
+        .from('checklist-photos').list('', { limit: 1 });
+      const missing = /not found|does not exist/i.test(storageError?.message ?? '');
       checks.push({
         name: 'Photo storage',
-        ok: !bucketError && Boolean(buckets?.some((b) => b.name === 'checklist-photos')),
-        detail: bucketError
-          ? bucketError.message
-          : buckets?.some((b) => b.name === 'checklist-photos')
-            ? 'Bucket ready'
-            : 'Bucket missing — run /setup, which creates it',
+        ok: !storageError,
+        detail: !storageError
+          ? 'Bucket reachable'
+          : missing
+            ? 'Bucket missing — run /setup, which creates it'
+            : storageError.message,
       });
     } catch (e: any) {
       checks.push({
