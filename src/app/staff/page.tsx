@@ -184,6 +184,10 @@ export default function StaffPage() {
           </button>
         ))}
         {staff.length === 0 && <p className="empty">No staff set up for this outlet yet.</p>}
+        <a className="btn btn-ghost" href="/manager"
+          style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 16 }}>
+          Manager sign in
+        </a>
       </Screen>
     );
   }

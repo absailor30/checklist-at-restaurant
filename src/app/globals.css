@@ -202,3 +202,32 @@ label { display: block; font-size: 14px; font-weight: 600; margin: 14px 0 6px; }
   animation: spin 0.7s linear infinite; margin: 40px auto;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Manager screen ------------------------------------------------------- */
+
+.tabs {
+  display: flex; gap: 6px; margin-bottom: 16px;
+  background: var(--surface-2); padding: 4px; border-radius: 12px;
+}
+.tab {
+  flex: 1; min-height: 42px; padding: 8px 6px;
+  background: transparent; border: none; color: var(--muted);
+  font-size: 14px; font-weight: 600; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.tabcount {
+  font-size: 11px; font-weight: 700; min-width: 19px; padding: 1px 5px;
+  border-radius: 999px; background: var(--border); color: var(--muted);
+}
+.tabcount.urgent { background: var(--locked); color: var(--surface); }
+
+.segmented {
+  display: flex; gap: 4px; margin-top: 16px;
+  background: var(--surface-2); padding: 4px; border-radius: 12px;
+}
+.segmented button {
+  flex: 1; min-height: 44px; padding: 8px 6px; font-size: 14px; font-weight: 600;
+  background: transparent; border: none; color: var(--muted); border-radius: 9px;
+}
+.segmented button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }

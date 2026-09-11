@@ -13,6 +13,10 @@ import { SEED_ROLES, SEED_SHIFTS, SEED_TEMPLATES } from '@/lib/checklist-content
 
 export const DEMO_ORG = 'Spice Garden Restaurants';
 export const DEMO_PIN = '1234';
+// Demo manager accounts. Real deployments create these through proper signup;
+// these exist so the manager screen can be demonstrated immediately.
+export const DEMO_MANAGER_PASSWORD = 'demo-manager-2026';
+export const DEMO_EMAIL_DOMAIN = 'spicegarden.demo';
 const HISTORY_DAYS = 14;
 
 const OUTLETS = [
@@ -41,6 +45,8 @@ const STAFF = [
 export interface SeedResult {
   outlets: number; staff: number; templates: number;
   submissions: number; frozen: number; pin: string;
+  managers: { name: string; role: string; email: string }[];
+  managerPassword: string;
 }
 
 export async function buildDemo(
@@ -99,9 +105,34 @@ export async function buildDemo(
 
   const pinHash = await bcrypt.hash(DEMO_PIN, 10);
   const users: any[] = [];
+  const managerLogins: { name: string; role: string; email: string }[] = [];
+
   for (const s of STAFF) {
+    const roleDef = SEED_ROLES.find((r) => r.name === s.role)!;
+
+    // Anyone who can review or unlock needs a real account with a password.
+    // An approval trail signed by a shared four-digit PIN would not be worth
+    // anything in a dispute or an inspection.
+    let authUserId: string | null = null;
+    let email: string | null = null;
+    if (roleDef.canReview || roleDef.canUnlock) {
+      email = `${s.name.split(' ')[0].toLowerCase()}@${DEMO_EMAIL_DOMAIN}`;
+      const { data: created, error: authError } = await db.auth.admin.createUser({
+        email,
+        password: DEMO_MANAGER_PASSWORD,
+        email_confirm: true,
+        user_metadata: { name: s.name },
+      });
+      if (authError && !/already/i.test(authError.message)) {
+        throw new Error(`auth account for ${email}: ${authError.message}`);
+      }
+      authUserId = created?.user?.id ?? await findAuthUser(db, email);
+      managerLogins.push({ name: s.name, role: s.role, email });
+    }
+
     const u = await insert('users', {
       org_id: org.id, role_id: roles[s.role].id, name: s.name,
+      email, auth_user_id: authUserId,
       pin_hash: pinHash, pin_set_at: new Date().toISOString(),
     });
     for (const o of s.outlet === null ? outlets : [outlets[s.outlet]]) {
@@ -236,7 +267,15 @@ export async function buildDemo(
   return {
     outlets: outlets.length, staff: users.length, templates: templates.length,
     submissions, frozen, pin: DEMO_PIN,
+    managers: managerLogins, managerPassword: DEMO_MANAGER_PASSWORD,
   };
+}
+
+// A rebuild reuses auth accounts that already exist, since deleting the
+// organisation does not remove them.
+async function findAuthUser(db: SupabaseClient, email: string): Promise<string | null> {
+  const { data } = await db.auth.admin.listUsers({ perPage: 200 });
+  return data?.users.find((u) => u.email === email)?.id ?? null;
 }
 
 function isoDate(daysAgo: number): string {

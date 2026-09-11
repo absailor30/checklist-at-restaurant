@@ -7,6 +7,8 @@ export default function SetupPage() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [logins, setLogins] = useState<{ name: string; role: string; email: string }[]>([]);
+  const [managerPassword, setManagerPassword] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function run(reset: boolean) {
@@ -29,6 +31,8 @@ export default function SetupPage() {
         setMessage(data.message);
       } else {
         const r = data.result;
+        setLogins(r.managers ?? []);
+        setManagerPassword(r.managerPassword ?? null);
         setMessage(
           `Demo ready: ${r.outlets} outlets, ${r.staff} staff, ${r.templates} checklists, ` +
           `${r.submissions} submissions, ${r.frozen} locked items. ` +
@@ -71,6 +75,22 @@ export default function SetupPage() {
           </button>
         </div>
       </div>
+
+      {logins.length > 0 && (
+        <div className="card">
+          <strong>Manager sign-ins</strong>
+          <p className="lede" style={{ fontSize: 13, margin: '6px 0 12px' }}>
+            Use these at <code>/manager</code>. Password for all of them:{' '}
+            <strong>{managerPassword}</strong>
+          </p>
+          {logins.map((m) => (
+            <div key={m.email} className="lockbox" style={{ marginTop: 8 }}>
+              <div className="row"><span className="label">{m.role}</span><span>{m.name}</span></div>
+              <div className="row"><span className="label">Email</span><span>{m.email}</span></div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <p className="lede" style={{ fontSize: 13 }}>
         <strong>Create</strong> does nothing if the demo already exists.{' '}
