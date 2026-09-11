@@ -262,9 +262,12 @@ create table lock_events (
 create index on lock_events (run_id, created_at);
 create index on lock_events (org_id, created_at desc);
 
--- Enforce append-only at the database level, not just in application code.
-create rule lock_events_no_update as on update to lock_events do instead nothing;
-create rule lock_events_no_delete as on delete to lock_events do instead nothing;
+-- Append-only is enforced by row-level security in 0002: lock_events grants
+-- only SELECT and INSERT, and UPDATE and DELETE are denied outright.
+--
+-- Rewrite rules were used here originally and had to be removed: they also
+-- rewrite the system's referential-integrity queries, which made it impossible
+-- to delete an organisation once it had any lock events. See 0003.
 
 -- ---------------------------------------------------------------- notifications
 

@@ -16,8 +16,13 @@ You need:
 - your Supabase project (already created)
 - a Vercel account — free, and you can sign up *with* your GitHub account
 
-You should already have run `0001_initial_schema.sql` and `0002_rls.sql` in the
-Supabase SQL Editor. If you have not, do that first.
+You should already have run the migration files in `supabase/migrations/` in
+the Supabase SQL Editor, in order: `0001_initial_schema.sql`,
+`0002_rls.sql`, then `0003_lock_events_append_only_fix.sql`. If you have not,
+do that first.
+
+`0003` is required even on a database where `0001` and `0002` already ran: it
+removes rules that made it impossible to delete an organisation.
 
 ---
 
