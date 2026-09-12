@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ThemeSwitcher } from '@/components/theme-switcher';
+import { NotificationBell } from '@/components/notifications';
 
 // The floor-staff flow, as one screen with steps: pick outlet (once per
 // device) -> pick your name -> PIN -> pick your shift -> checklist.
@@ -329,8 +330,11 @@ export default function StaffPage() {
           <h1>{me?.name}</h1>
           <div className="sub">{me?.role} · {outlet?.name}</div>
         </div>
-        <button className="btn-ghost" style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }}
-          onClick={signOut}>Done</button>
+        <div className="bellrow">
+          <NotificationBell />
+          <button className="btn-ghost" style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }}
+            onClick={signOut}>Done</button>
+        </div>
       </div>
 
       <div className="shell">

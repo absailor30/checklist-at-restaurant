@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { NotificationBell } from '@/components/notifications';
 
 // The owner's view. Headline numbers first, then per-outlet standing, then the
 // things needing a person.
@@ -104,10 +105,13 @@ export default function OwnerPage() {
           <h1>{data.org}</h1>
           <div className="sub">Owner view · {data.date}</div>
         </div>
-        <a className="btn-ghost" href="/manager"
-           style={{ width: 'auto', minHeight: 40, padding: '8px 14px', textDecoration: 'none' }}>
-          Manager
-        </a>
+        <div className="bellrow">
+          <NotificationBell />
+          <a className="btn-ghost" href="/manager"
+             style={{ width: 'auto', minHeight: 40, padding: '8px 14px', textDecoration: 'none' }}>
+            Manager
+          </a>
+        </div>
       </div>
 
       <div className="shell">

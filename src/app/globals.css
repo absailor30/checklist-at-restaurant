@@ -375,3 +375,18 @@ label { display: block; font-size: 14px; font-weight: 600; margin: 14px 0 6px; }
 .themebar button.on {
   background: var(--surface); color: var(--text); box-shadow: var(--shadow);
 }
+
+/* Notification bell ------------------------------------------------------ */
+
+.bell {
+  position: relative; width: auto; min-height: 40px; padding: 6px 12px;
+  background: transparent; border: 1px solid var(--border); border-radius: 11px;
+  font-size: 18px; line-height: 1;
+}
+.bellcount {
+  position: absolute; top: -6px; right: -6px;
+  min-width: 19px; padding: 1px 5px;
+  background: var(--locked); color: var(--surface);
+  border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 1.5;
+}
+.topbar .bellrow { display: flex; align-items: center; gap: 8px; }

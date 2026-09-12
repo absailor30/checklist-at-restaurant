@@ -267,3 +267,28 @@ cannot separate the hues at all, and in a black-and-white printout.
 every migration applied twice to a throwaway PostgreSQL database, the demo
 seeder's rows applied to a real schema, all routes rendered in a browser, and a
 WCAG contrast check on every text node in all four theme variants.
+
+---
+
+## Notifications
+
+**In the app — working now.** A bell with an unread count appears on the staff,
+manager and owner screens. Managers are told when a task locks, escalates,
+needs approval, or comes back out of range; staff are told when their work is
+approved or sent back. It refreshes every minute.
+
+Notifications go only to managers assigned to the outlet the work belongs to.
+Telling a manager in another branch about a fridge they cannot see is how a
+team learns to ignore the alerts that matter.
+
+**Push notifications to the phone — not delivered yet.** The database table for
+device subscriptions exists, but sending requires a VAPID key pair added to the
+deployment as `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`, plus a service worker
+to receive them.
+
+**Email — not delivered yet.** Requires an email provider's API key (Resend has
+a free tier) as `RESEND_API_KEY`.
+
+Both are deliberately left until someone decides they are needed: each adds a
+credential to manage and a way for the app to annoy people, and the in-app bell
+covers a team that already has the app open during a shift.

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { NotificationBell } from '@/components/notifications';
 
 // The manager screen: what is locked and waiting on them, what needs
 // approving, what came back out of range, and how each outlet is tracking.
@@ -93,10 +94,13 @@ export default function ManagerPage() {
           <h1>{data.manager.name}</h1>
           <div className="sub">{data.manager.role} · {data.date}</div>
         </div>
-        <button className="btn-ghost" style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }}
-          onClick={async () => { await supabase.auth.signOut(); setSession('out'); }}>
-          Sign out
-        </button>
+        <div className="bellrow">
+          <NotificationBell />
+          <button className="btn-ghost" style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }}
+            onClick={async () => { await supabase.auth.signOut(); setSession('out'); }}>
+            Sign out
+          </button>
+        </div>
       </div>
 
       <div className="shell">
