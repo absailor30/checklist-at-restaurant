@@ -1,5 +1,5 @@
-import crypto from 'crypto';
 import { json } from '@/lib/no-store';
+import { cronTokenMatches } from '@/lib/cron-auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ensureRuns, refreshLocks } from '@/lib/checklist';
 import { notify, recipientsForLock } from '@/lib/notify';
@@ -109,23 +109,18 @@ export async function GET(request: Request) {
   return json({ ok: true, ms: Date.now() - startedAt, ...summary });
 }
 
-// Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`. The same secret
-// works for an external scheduler, which is how this gets a shorter interval
-// than the Hobby plan's once-a-day cron allows.
+// Vercel Cron sends `Authorization: Bearer <CRON_SECRET>` when that variable is
+// set. The same token works for an external scheduler, which is how this gets a
+// useful interval on a plan whose own cron runs only once a day.
 function authorise(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return json(
-      { error: 'CRON_SECRET is not configured on the server.' },
-      { status: 500 }
-    );
-  }
-
   const header = request.headers.get('authorization') ?? '';
   const provided = header.replace(/^Bearer\s+/i, '');
-  const a = Buffer.from(provided);
-  const b = Buffer.from(secret);
-  const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
 
-  return ok ? null : json({ error: 'Not authorised.' }, { status: 401 });
+  try {
+    return cronTokenMatches(provided)
+      ? null
+      : json({ error: 'Not authorised.' }, { status: 401 });
+  } catch (e: any) {
+    return json({ error: e?.message ?? 'Not configured.' }, { status: 500 });
+  }
 }

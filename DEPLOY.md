@@ -184,9 +184,17 @@ task needs to reach a manager.
 
 ### Turning it on
 
-1. Invent a long random string.
-2. Vercel → Settings → Environment Variables → add `CRON_SECRET` as a **Secret**
-   with that value, then redeploy. `/health` shows whether it is set.
+Nothing to configure. The job's token is derived from `APP_SESSION_SECRET`,
+which the app already requires, so it works as soon as the app is deployed.
+`/health` confirms it under **Scheduled job**.
+
+Setting `CRON_SECRET` explicitly still overrides the derived token, if you would
+rather manage and rotate it yourself.
+
+To wire up an external scheduler, open `/setup`, enter the setup password, and
+press **Show the scheduler details** — it prints the exact URL and header to
+paste in. That is behind the setup password because `/health` is public, and
+anything shown there is shown to the internet.
 
 `vercel.json` schedules `/api/cron/refresh` once a day, at 02:00 UTC.
 

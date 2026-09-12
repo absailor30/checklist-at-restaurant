@@ -23,6 +23,7 @@ export default function SetupPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
+  const [cron, setCron] = useState<{ token: string; explicit: boolean; path: string } | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -63,6 +64,18 @@ export default function SetupPage() {
       setBusy(false);
       await refresh();
     }
+  }
+
+  async function revealCron() {
+    setError(null);
+    const res = await fetch('/api/admin/cron-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    const data = await res.json();
+    if (!res.ok) { setError(data.error); return; }
+    setCron(data);
   }
 
   const healthy = status?.exists && (status.outlets ?? 0) > 0;
@@ -143,6 +156,48 @@ export default function SetupPage() {
           ))}
         </div>
       )}
+
+      <div className="card">
+        <strong>Scheduled job</strong>
+        <p className="lede" style={{ fontSize: 13, margin: '8px 0 12px' }}>
+          Freezes overdue tasks and escalates them while nobody has the app open.
+          It runs daily on its own — this plan allows no more than that — so for
+          anything useful, point a free scheduler (cron-job.org and similar) at
+          the address below every 15 minutes.
+        </p>
+
+        {cron ? (
+          <>
+            <div className="lockbox">
+              <div className="row">
+                <span className="label">Method</span><span>GET</span>
+              </div>
+              <div className="row">
+                <span className="label">URL</span>
+                <span style={{ wordBreak: 'break-all' }}>
+                  {typeof window !== 'undefined' ? window.location.origin : ''}{cron.path}
+                </span>
+              </div>
+              <div className="row">
+                <span className="label">Header</span>
+                <span style={{ wordBreak: 'break-all' }}>
+                  Authorization: Bearer {cron.token}
+                </span>
+              </div>
+            </div>
+            <p className="lede" style={{ fontSize: 12, margin: '10px 0 0' }}>
+              {cron.explicit
+                ? 'This is the CRON_SECRET you set.'
+                : 'Derived from the session secret, so there is nothing to configure. Changing APP_SESSION_SECRET changes this token too.'}{' '}
+              Treat it like a password.
+            </p>
+          </>
+        ) : (
+          <button className="btn-ghost" disabled={!password} onClick={revealCron}>
+            Show the scheduler details
+          </button>
+        )}
+      </div>
 
       <p className="lede" style={{ fontSize: 13 }}>
         <strong>Create</strong> does nothing if the demo is already complete.{' '}

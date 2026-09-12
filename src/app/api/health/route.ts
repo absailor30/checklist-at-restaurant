@@ -39,11 +39,13 @@ export async function GET() {
         : 'Set',
   });
   checks.push({
-    name: 'Scheduled job secret',
-    ok: Boolean(process.env.CRON_SECRET),
+    name: 'Scheduled job',
+    ok: Boolean(process.env.CRON_SECRET) || Boolean(secret && secret.length >= 32),
     detail: process.env.CRON_SECRET
-      ? 'Set — the overdue and escalation job can run'
-      : 'Missing CRON_SECRET — nothing will freeze or escalate while nobody has the app open',
+      ? 'Ready, using the CRON_SECRET you set'
+      : secret && secret.length >= 32
+        ? 'Ready, using a token derived from the session secret — see /setup'
+        : 'Not available: set APP_SESSION_SECRET, or CRON_SECRET directly',
   });
   checks.push({
     name: 'Setup password',
