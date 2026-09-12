@@ -390,3 +390,22 @@ label { display: block; font-size: 14px; font-weight: 600; margin: 14px 0 6px; }
   border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 1.5;
 }
 .topbar .bellrow { display: flex; align-items: center; gap: 8px; }
+
+/* Compliance score table -------------------------------------------------- */
+
+.scoretable { display: flex; flex-direction: column; }
+.scorehead, .scorerow {
+  display: grid;
+  grid-template-columns: 1fr 3.2rem 3.4rem 5rem;
+  gap: 8px; align-items: baseline;
+  padding: 8px 0;
+}
+.scorehead {
+  font-size: 12px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.03em;
+  border-bottom: 1px solid var(--border);
+}
+.scorerow { border-bottom: 1px solid var(--border); font-size: 14px; }
+.scorerow:last-child { border-bottom: none; }
+.scorenum { text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; }
+.scoremeta { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }

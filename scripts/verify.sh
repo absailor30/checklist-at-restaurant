@@ -23,6 +23,9 @@ echo "--- types and build ---"
 step "typecheck"         npx tsc --noEmit
 step "production build"  npx next build
 
+echo "--- logic ---"
+step "scoring rules"  npx tsx scripts/test-scoring.ts
+
 echo "--- queries ---"
 step "no ambiguous relationship hints"  bash scripts/check-embeds.sh
 

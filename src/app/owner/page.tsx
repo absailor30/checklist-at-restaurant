@@ -25,6 +25,16 @@ interface LockedRow {
   id: string; title: string; outlet: string;
   state: string; escalationLevel: number; lockedAt: string;
 }
+interface SectionScore {
+  section: string; scored: number; points: number; waived: number;
+  percent: number; previous: number | null; change: number | null;
+}
+interface Scores {
+  date: string; previousDate: string | null;
+  sections: SectionScore[];
+  overall: SectionScore;
+}
+
 interface Dashboard {
   org: string; date: string; days: number;
   headline: {
@@ -34,6 +44,8 @@ interface Dashboard {
   };
   outlets: OutletStat[];
   trend: TrendPoint[];
+  scores: Scores;
+  scoreTrend: { date: string; percent: number }[];
   outOfRange: Row[];
   waived: Row[];
   byManager: Row[];
@@ -133,6 +145,65 @@ export default function OwnerPage() {
                 note={`${h.byManager} done by managers`}
                 tone={h.waived === 0 ? 'ok' : 'warn'} />
         </div>
+
+        {data.scores && (
+          <>
+            <h2 style={{ marginTop: 28 }}>Compliance score</h2>
+            <p className="lede">
+              Every check scores 1 or 0. Waived checks are left out rather than
+              counted either way. A completed check still scores 0 if the
+              reading was out of range or a manager sent it back — done and
+              compliant are different questions.
+            </p>
+
+            <div className="card">
+              <div className="barrow">
+                <span className="barlabel" style={{ fontSize: 17 }}>Overall</span>
+                <span className="barvalue" style={{ fontSize: 17, fontWeight: 700 }}>
+                  {data.scores.overall.percent}%
+                  <ChangeTag change={data.scores.overall.change} />
+                </span>
+              </div>
+              <div className="progress">
+                <div style={{
+                  width: `${data.scores.overall.percent}%`,
+                  background: toneColour(data.scores.overall.percent),
+                }} />
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}>
+                {data.scores.overall.points} of {data.scores.overall.scored} checks passed
+                {data.scores.overall.waived > 0 && ` · ${data.scores.overall.waived} waived`}
+                {data.scores.previousDate && ` · previous inspection ${data.scores.previousDate}`}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="scoretable">
+                <div className="scorehead">
+                  <span>Department</span>
+                  <span>Last</span>
+                  <span>Now</span>
+                  <span>Change</span>
+                </div>
+                {data.scores.sections.map((s) => (
+                  <div className="scorerow" key={s.section}>
+                    <span>
+                      {s.section}
+                      <span className="scoremeta">
+                        {s.points}/{s.scored}{s.waived ? ` · ${s.waived} waived` : ''}
+                      </span>
+                    </span>
+                    <span className="scorenum">{s.previous === null ? '—' : `${s.previous}%`}</span>
+                    <span className="scorenum" style={{ color: toneColour(s.percent), fontWeight: 700 }}>
+                      {s.percent}%
+                    </span>
+                    <span className="scorenum"><ChangeTag change={s.change} /></span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
 
         <h2 style={{ marginTop: 28 }}>Outlets today</h2>
         <p className="lede">Completion against the tasks due so far.</p>
@@ -245,6 +316,24 @@ export default function OwnerPage() {
       </div>
     </>
   );
+}
+
+// Change is shown with its sign and an arrow, never colour alone.
+function ChangeTag({ change }: { change: number | null }) {
+  if (change === null) return <span style={{ color: 'var(--muted)' }}> —</span>;
+  if (change === 0) return <span style={{ color: 'var(--muted)' }}> no change</span>;
+  const up = change > 0;
+  return (
+    <span style={{ color: up ? 'var(--ok)' : 'var(--locked)', fontWeight: 700 }}>
+      {' '}{up ? '▲' : '▼'} {up ? '+' : ''}{change}%
+    </span>
+  );
+}
+
+function toneColour(percent: number): string {
+  if (percent >= 95) return 'var(--ok)';
+  if (percent >= 85) return 'var(--warn)';
+  return 'var(--locked)';
 }
 
 function Tile({ label, value, note, tone }: {

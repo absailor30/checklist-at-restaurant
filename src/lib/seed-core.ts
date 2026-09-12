@@ -204,6 +204,8 @@ export async function buildDemo(
         description: item.description ?? null, sort_order: i,
         proof: item.proof, proof_required: item.proofRequired ?? false,
         photo_mode: item.photoMode ?? 'none',
+        photo_facing: item.photoFacing ?? 'environment',
+        readings: item.readings ?? null,
         requires_approval: item.requiresApproval ?? false,
         due_offset_minutes: item.dueOffsetMinutes,
         min_value: item.min ?? null, max_value: item.max ?? null,

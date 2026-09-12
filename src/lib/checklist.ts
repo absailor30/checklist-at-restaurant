@@ -18,6 +18,8 @@ export interface ItemView {
   // A photo in addition to the primary proof, e.g. a picture of the fridge
   // display beside the temperature that was typed in.
   photoMode: 'none' | 'optional' | 'required';
+  photoFacing: 'environment' | 'user';
+  readings: { label: string; min?: number; max?: number; unit?: string }[] | null;
   requiresApproval: boolean;
   unit: string | null;
   minValue: number | null;

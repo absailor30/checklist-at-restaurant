@@ -18,6 +18,11 @@ export interface SeedItem {
   // A photo alongside the primary proof. A temperature log wants both: the
   // number to trend, and a picture of the display showing it.
   photoMode?: SeedPhotoMode;
+  // Which camera a photo opens: the rear one to photograph equipment, or the
+  // front one to prove the person is standing at the station.
+  photoFacing?: 'environment' | 'user';
+  // Several named readings for one piece of equipment, checked together.
+  readings?: { label: string; min?: number; max?: number; unit?: string }[];
   requiresApproval?: boolean;
   dueOffsetMinutes: number;
   min?: number;

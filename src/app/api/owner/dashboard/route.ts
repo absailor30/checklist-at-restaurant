@@ -2,6 +2,7 @@ import { json } from '@/lib/no-store';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { currentManager } from '@/lib/supabase/server';
 import { ensureRuns, refreshLocks } from '@/lib/checklist';
+import { compare, scoreDate } from '@/lib/scoring';
 import { todayIn } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
@@ -50,7 +51,7 @@ export async function GET(request: Request) {
   const [{ data: runs }, { data: items }, { data: submissions }, { data: locks }] =
     await Promise.all([
       db.from('checklist_runs')
-        .select('id, outlet_id, template_id, run_date')
+        .select('id, outlet_id, template_id, run_date, checklist_templates!inner(role_id)')
         .eq('org_id', manager.orgId).gte('run_date', fromDate).lte('run_date', today),
       db.from('checklist_items')
         .select('id, template_id, title, unit, min_value, max_value')
@@ -121,6 +122,43 @@ export async function GET(request: Request) {
     at: s.submitted_at,
   });
 
+  // Compliance scoring, in the shape a line-check audit uses: every check
+  // scores 1 or 0, rolled up per department and compared against the previous
+  // day. Completion and compliance are different questions — forty checks all
+  // done says nothing if the freezer read −8°C in one of them.
+  const { data: roleRows } = await db
+    .from('roles').select('id, name').eq('org_id', manager.orgId);
+  const roleName = new Map((roleRows ?? []).map((r) => [r.id, r.name]));
+
+  const sectionOf = (run: any) => {
+    const template = Array.isArray(run.checklist_templates)
+      ? run.checklist_templates[0] : run.checklist_templates;
+    return roleName.get(template?.role_id) ?? 'Unassigned';
+  };
+
+  const scoreInput = {
+    runs: (runs ?? []) as any[],
+    items: (items ?? []) as any[],
+    submissions: (submissions ?? []) as any[],
+    sectionOf,
+  };
+
+  const scoreToday = scoreDate({ ...scoreInput, date: today });
+  const previousDate = [...new Set((runs ?? []).map((r) => r.run_date))]
+    .filter((d) => d < today)
+    .sort()
+    .pop();
+  const scorePrevious = previousDate
+    ? scoreDate({ ...scoreInput, date: previousDate })
+    : undefined;
+  const scores = compare(scoreToday, scorePrevious);
+
+  // Score per day across the window, for the trend.
+  const scoreTrend = trend.map((t) => ({
+    date: t.date,
+    percent: scoreDate({ ...scoreInput, date: t.date }).overall.percent,
+  }));
+
   const todayExpected = expectedFor((r) => r.run_date === today);
   const todayDone = live.filter(
     (s: any) => runById.get(s.run_id)?.run_date === today
@@ -143,6 +181,8 @@ export async function GET(request: Request) {
     },
     outlets: outletStats,
     trend,
+    scores,
+    scoreTrend,
     outOfRange: (submissions ?? []).filter((s) => s.out_of_bounds)
       .sort((a, b) => +new Date(b.submitted_at) - +new Date(a.submitted_at))
       .slice(0, 20).map(shape),
