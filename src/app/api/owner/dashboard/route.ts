@@ -56,7 +56,7 @@ export async function GET(request: Request) {
         .select('id, template_id, title, unit, min_value, max_value')
         .eq('org_id', manager.orgId).eq('is_active', true),
       db.from('submissions')
-        .select('id, outlet_id, run_id, checklist_item_id, status, out_of_bounds, was_late, submitted_at, value_number, comment, users(name)')
+        .select('id, outlet_id, run_id, checklist_item_id, status, out_of_bounds, was_late, submitted_at, value_number, comment, users!submissions_user_id_fkey(name)')
         .eq('org_id', manager.orgId).gte('submitted_at', `${fromDate}T00:00:00Z`)
         .is('superseded_by', null),
       db.from('item_locks')

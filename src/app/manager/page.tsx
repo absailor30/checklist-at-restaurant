@@ -56,8 +56,11 @@ export default function ManagerPage() {
   const load = useCallback(async () => {
     const res = await fetch(`/api/manager/overview?t=${Date.now()}`, { cache: 'no-store' });
     if (res.status === 401) { setSession('out'); return; }
-    const body = await res.json();
-    if (!res.ok) { setError(body.error); return; }
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(body.error ?? `Could not load the dashboard (error ${res.status}).`);
+      return;
+    }
     setData(body);
     setSession('in');
   }, []);

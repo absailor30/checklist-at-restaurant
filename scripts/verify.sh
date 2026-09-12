@@ -23,6 +23,9 @@ echo "--- types and build ---"
 step "typecheck"         npx tsc --noEmit
 step "production build"  npx next build
 
+echo "--- queries ---"
+step "no ambiguous relationship hints"  bash scripts/check-embeds.sh
+
 echo "--- database ---"
 step "migrations apply cleanly"  bash scripts/verify-db.sh
 step "seeder produces valid rows" bash scripts/verify-seed.sh

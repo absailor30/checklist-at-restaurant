@@ -4,6 +4,7 @@ import { currentManager } from '@/lib/supabase/server';
 import { ensureRuns, refreshLocks } from '@/lib/checklist';
 import { empoweredRoles } from '@/lib/authority';
 import { addMinutes, todayIn } from '@/lib/time';
+import { unwrap } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,12 +55,16 @@ export async function GET(request: Request) {
   const empty = { locked: [], review: [], alerts: [], outlets: [], date };
   if (!runIds.length) return json(empty);
 
-  const [{ data: items }, { data: submissions }, { data: locks }] = await Promise.all([
-    db.from('checklist_items').select('*').eq('org_id', manager.orgId).eq('is_active', true),
+  const [items, submissions, locks] = await Promise.all([
+    db.from('checklist_items').select('*').eq('org_id', manager.orgId).eq('is_active', true)
+      .then((r) => unwrap<any[]>(r, 'checklist items')),
     db.from('submissions')
-      .select('*, users(name, role_id)')
-      .in('run_id', runIds).is('superseded_by', null),
-    db.from('item_locks').select('*').in('run_id', runIds).neq('state', 'resolved'),
+      // Named relationship: submissions references users twice.
+      .select('*, users!submissions_user_id_fkey(name, role_id)')
+      .in('run_id', runIds).is('superseded_by', null)
+      .then((r) => unwrap<any[]>(r, 'submissions')),
+    db.from('item_locks').select('*').in('run_id', runIds).neq('state', 'resolved')
+      .then((r) => unwrap<any[]>(r, 'item locks')),
   ]);
 
   const itemById = new Map((items ?? []).map((i) => [i.id, i]));

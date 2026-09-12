@@ -195,14 +195,14 @@ export async function POST(request: Request) {
   // approval. A freezer running warm is the event this app exists to catch,
   // and it must never be silently auto-approved.
   if (outOfBounds) {
-    await notifyChain(db, run.org_id, session.roleId, {
+    await notifyChain(db, run.org_id, session.roleId, run.outlet_id, {
       kind: 'out_of_bounds',
       title: `Reading out of range: ${item.title}`,
       body: `${session.name} recorded ${valueNumber}${item.unit ?? ''} (expected ${item.min_value}–${item.max_value}${item.unit ?? ''}).`,
       payload: { runId: run.id, itemId: item.id, submissionId },
     });
   } else if (item.requires_approval) {
-    await notifyChain(db, run.org_id, session.roleId, {
+    await notifyChain(db, run.org_id, session.roleId, run.outlet_id, {
       kind: 'review_needed',
       title: `Review needed: ${item.title}`,
       body: `Submitted by ${session.name}.`,
@@ -218,6 +218,7 @@ async function notifyChain(
   db: ReturnType<typeof createAdminClient>,
   orgId: string,
   roleId: string,
+  outletId: string,
   message: { kind: string; title: string; body: string; payload: Record<string, unknown> }
 ) {
   const { data: link } = await db
@@ -231,9 +232,13 @@ async function notifyChain(
   if (link.reports_to_user_id) {
     recipients = [link.reports_to_user_id];
   } else if (link.reports_to_role_id) {
+    // Only managers who actually work at this outlet. One at another branch can
+    // neither see the fridge nor do anything about it, and notifying everyone
+    // is how a team learns to ignore the notifications that matter.
     const { data } = await db
-      .from('users').select('id')
-      .eq('org_id', orgId).eq('role_id', link.reports_to_role_id).eq('is_active', true);
+      .from('users').select('id, user_outlets!inner(outlet_id)')
+      .eq('org_id', orgId).eq('role_id', link.reports_to_role_id).eq('is_active', true)
+      .eq('user_outlets.outlet_id', outletId);
     recipients = (data ?? []).map((u) => u.id);
   }
   if (!recipients.length) return;

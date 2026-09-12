@@ -174,8 +174,11 @@ export default function StaffPage() {
 
   const loadChecklist = useCallback(async () => {
     const res = await fetch(`/api/staff/checklist?t=${Date.now()}`, { cache: 'no-store' });
-    const data = await res.json();
-    if (!res.ok) { setError(data.error); return; }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(data.error ?? `Could not load the checklist (error ${res.status}).`);
+      return;
+    }
     setRuns(data.runs ?? []);
     setMe(data.staff ?? null);
     setTimezone(data.timezone ?? timezone);

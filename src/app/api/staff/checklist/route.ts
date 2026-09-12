@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { readSession } from '@/lib/session';
 import { ensureRuns, refreshLocks, unlockableRoleNames, type ItemView, type RunView } from '@/lib/checklist';
 import { addMinutes, todayIn } from '@/lib/time';
+import { unwrap } from '@/lib/db';
 
 // These routes read a session cookie and live database state, so they must run
 // per-request. Without this Next.js tries to execute them at build time, which
@@ -59,16 +60,21 @@ export async function GET() {
     });
   }
 
-  const [{ data: items }, { data: submissions }, { data: locks }] = await Promise.all([
+  const [items, submissions, locks] = await Promise.all([
     db.from('checklist_items')
       .select('*')
       .in('template_id', (runs ?? []).map((r) => r.template_id))
       .eq('is_active', true)
-      .order('sort_order'),
+      .order('sort_order')
+      .then((r) => unwrap<any[]>(r, 'checklist items')),
     db.from('submissions')
-      .select('*, users(name)')
-      .in('run_id', runIds).is('superseded_by', null),
-    db.from('item_locks').select('*').in('run_id', runIds),
+      // submissions references users twice (user_id and reviewed_by), so the
+      // relationship has to be named or PostgREST refuses the whole query.
+      .select('*, users!submissions_user_id_fkey(name)')
+      .in('run_id', runIds).is('superseded_by', null)
+      .then((r) => unwrap<any[]>(r, 'submissions')),
+    db.from('item_locks').select('*').in('run_id', runIds)
+      .then((r) => unwrap<any[]>(r, 'item locks')),
   ]);
 
   const subByKey = new Map((submissions ?? []).map((s) => [`${s.run_id}:${s.checklist_item_id}`, s]));
