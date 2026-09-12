@@ -196,8 +196,13 @@ export default function StaffPage() {
   // should see it freeze without pulling to refresh.
   useEffect(() => {
     if (step !== 'list') return;
-    const t = setInterval(() => { void loadChecklist(); }, 60_000);
-    return () => clearInterval(t);
+    const t = setInterval(() => { void loadChecklist(); }, 15_000);
+    const onVisible = () => { if (!document.hidden) void loadChecklist(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [step, loadChecklist]);
 
   // --- render -------------------------------------------------------------

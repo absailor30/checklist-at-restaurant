@@ -1,6 +1,7 @@
 import { json } from '@/lib/no-store';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { currentManager } from '@/lib/supabase/server';
+import { pushToUsers } from '@/lib/push';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,14 +44,26 @@ export async function POST(request: Request) {
 
   // Tell the staff member either way. Silent approval leaves them unsure
   // whether anyone looked.
+  const title = decision === 'approved' ? 'Task approved' : 'Task sent back';
+  const body = reviewNote || (decision === 'approved' ? 'Approved by your manager.' : '');
+
   await db.from('notifications').insert({
     org_id: manager.orgId,
     user_id: submission.user_id,
     kind: decision === 'approved' ? 'approved' : 'rejected',
-    title: decision === 'approved' ? 'Task approved' : 'Task sent back',
-    body: reviewNote || (decision === 'approved' ? 'Approved by your manager.' : ''),
+    title,
+    body,
     payload: { submissionId: submission.id },
+    sent_channels: ['in_app', 'push'],
   });
+
+  try {
+    await pushToUsers(db, [submission.user_id], {
+      title, body, url: '/staff', tag: submission.checklist_item_id,
+    });
+  } catch (e) {
+    console.error('push delivery failed', e);
+  }
 
   return json({ ok: true });
 }

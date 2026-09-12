@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { readSession } from '@/lib/session';
 import { PHOTO_BUCKET, photoPath } from '@/lib/storage';
 import { addMinutes } from '@/lib/time';
+import { pushToUsers } from '@/lib/push';
 
 // These routes read a session cookie and live database state, so they must run
 // per-request. Without this Next.js tries to execute them at build time, which
@@ -248,8 +249,21 @@ async function notifyChain(
       org_id: orgId, user_id: userId,
       kind: message.kind, title: message.title, body: message.body,
       payload: message.payload,
+      sent_channels: ['in_app', 'push'],
     }))
   );
+
+  // Best-effort: the stored notification is the record, the push is a nudge.
+  try {
+    await pushToUsers(db, recipients, {
+      title: message.title,
+      body: message.body,
+      url: '/manager',
+      tag: String(message.payload?.itemId ?? message.kind),
+    });
+  } catch (e) {
+    console.error('push delivery failed', e);
+  }
 }
 
 function isUuid(v: string): boolean {

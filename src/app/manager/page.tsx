@@ -77,8 +77,15 @@ export default function ManagerPage() {
   // refresh.
   useEffect(() => {
     if (session !== 'in') return;
-    const t = setInterval(() => { void load(); }, 60_000);
-    return () => clearInterval(t);
+    // 15 seconds rather than a minute: a manager watching for a submission
+    // should not wait up to a minute to see it arrive.
+    const t = setInterval(() => { void load(); }, 15_000);
+    const onVisible = () => { if (!document.hidden) void load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [session, load]);
 
   if (session === 'loading') return <div className="spinner" />;

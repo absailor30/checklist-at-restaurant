@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { pushToUsers } from '@/lib/push';
 
 // Notifications go to whoever is currently empowered to act, which for a
 // frozen item is the roles the escalation has reached — not simply everyone
@@ -51,7 +52,10 @@ export async function notify(
   db: SupabaseClient,
   orgId: string,
   recipients: Recipient[],
-  message: { kind: string; title: string; body: string; payload?: Record<string, unknown> }
+  message: {
+    kind: string; title: string; body: string;
+    payload?: Record<string, unknown>; url?: string;
+  }
 ): Promise<number> {
   if (!recipients.length) return 0;
 
@@ -63,9 +67,24 @@ export async function notify(
       title: message.title,
       body: message.body,
       payload: message.payload ?? {},
-      sent_channels: ['in_app'],
+      sent_channels: ['in_app', 'push'],
     }))
   );
   if (error) throw new Error(`notifications: ${error.message}`);
+
+  // Push is best-effort on top of the stored notification. A push that fails
+  // to send must never fail the work that triggered it, and the bell still
+  // carries the message either way.
+  try {
+    await pushToUsers(db, recipients.map((r) => r.id), {
+      title: message.title,
+      body: message.body,
+      url: message.url ?? '/manager',
+      tag: String(message.payload?.itemId ?? message.kind),
+    });
+  } catch (e) {
+    console.error('push delivery failed', e);
+  }
+
   return recipients.length;
 }

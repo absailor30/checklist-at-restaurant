@@ -23,6 +23,7 @@ export function NotificationBell() {
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [push, setPush] = useState<'unsupported' | 'off' | 'on' | 'blocked' | 'busy'>('off');
 
   const load = useCallback(async () => {
     try {
@@ -39,9 +40,94 @@ export function NotificationBell() {
 
   useEffect(() => {
     void load();
-    const timer = setInterval(() => { void load(); }, 60_000);
-    return () => clearInterval(timer);
+    const timer = setInterval(() => { void load(); }, 30_000);
+
+    // Also refresh when the screen comes back into view. Someone returning to
+    // the tab expects to see the current position, not whatever it was when
+    // they left.
+    const onVisible = () => { if (!document.hidden) void load(); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [load]);
+
+  // Work out whether this device already has push switched on.
+  useEffect(() => {
+    (async () => {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        setPush('unsupported');
+        return;
+      }
+      if (Notification.permission === 'denied') { setPush('blocked'); return; }
+
+      const registration = await navigator.serviceWorker.getRegistration();
+      const existing = await registration?.pushManager.getSubscription();
+      setPush(existing ? 'on' : 'off');
+    })().catch(() => setPush('unsupported'));
+  }, []);
+
+  async function enablePush() {
+    setError(null);
+    setPush('busy');
+    try {
+      const keyRes = await fetch('/api/push/subscribe', { cache: 'no-store' });
+      const keyData = await keyRes.json();
+      if (!keyData.available) {
+        setError(keyData.reason ?? 'Push is not available on this deployment.');
+        setPush('off');
+        return;
+      }
+
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') { setPush('blocked'); return; }
+
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: base64UrlToBytes(keyData.publicKey),
+      });
+
+      const res = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? 'Could not save the subscription.');
+        setPush('off');
+        return;
+      }
+      setPush('on');
+    } catch (e: any) {
+      setError(e?.message ?? 'Could not turn on notifications for this device.');
+      setPush('off');
+    }
+  }
+
+  async function disablePush() {
+    setPush('busy');
+    try {
+      const registration = await navigator.serviceWorker.getRegistration();
+      const subscription = await registration?.pushManager.getSubscription();
+      if (subscription) {
+        await fetch('/api/push/subscribe', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        });
+        await subscription.unsubscribe();
+      }
+      setPush('off');
+    } catch {
+      setPush('on');
+    }
+  }
 
   async function markAllRead() {
     setError(null);
@@ -92,6 +178,26 @@ export function NotificationBell() {
               </div>
             ))}
 
+            <div className="card" style={{ marginTop: 16 }}>
+              <strong>Alerts on this phone</strong>
+              <p className="lede" style={{ fontSize: 13, margin: '6px 0 12px' }}>
+                {push === 'on'
+                  ? 'This device will buzz even when the app is closed.'
+                  : push === 'blocked'
+                    ? 'Notifications are blocked for this site. Allow them in your browser settings, then come back.'
+                    : push === 'unsupported'
+                      ? 'This browser cannot deliver notifications when the app is closed.'
+                      : 'Get alerted even when the app is closed — useful once you have left the restaurant.'}
+              </p>
+              {push === 'on' && (
+                <button className="btn-ghost" onClick={disablePush}>Turn off on this device</button>
+              )}
+              {push === 'off' && (
+                <button className="btn-primary" onClick={enablePush}>Turn on</button>
+              )}
+              {push === 'busy' && <div className="spinner" style={{ margin: '10px auto' }} />}
+            </div>
+
             <div className="btn-row" style={{ marginTop: 18 }}>
               <button className="btn-ghost" onClick={() => setOpen(false)}>Close</button>
               <button className="btn-primary" onClick={markAllRead} disabled={unread === 0}>
@@ -103,6 +209,17 @@ export function NotificationBell() {
       )}
     </>
   );
+}
+
+// The browser wants the key as raw bytes, not the base64url text the server
+// sends.
+function base64UrlToBytes(value: string): ArrayBuffer {
+  const padded = (value + '='.repeat((4 - (value.length % 4)) % 4))
+    .replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(padded);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes.buffer;
 }
 
 function toneOf(kind: string): string {
