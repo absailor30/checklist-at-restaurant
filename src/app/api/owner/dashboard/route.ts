@@ -57,12 +57,15 @@ export async function GET(request: Request) {
         .eq('org_id', manager.orgId).eq('is_active', true),
       db.from('submissions')
         .select('id, outlet_id, run_id, checklist_item_id, status, out_of_bounds, was_late, submitted_at, value_number, comment, users!submissions_user_id_fkey(name)')
-        .eq('org_id', manager.orgId).gte('submitted_at', `${fromDate}T00:00:00Z`)
-        .is('superseded_by', null),
+        .eq('org_id', manager.orgId).gte('submitted_at', `${fromDate}T00:00:00Z`),
       db.from('item_locks')
         .select('id, outlet_id, run_id, checklist_item_id, state, escalation_level, locked_at')
         .eq('org_id', manager.orgId).neq('state', 'resolved'),
     ]);
+
+  // Completion is counted from live rows only; a re-taken reading is one task
+  // done, not two. Out-of-range history keeps every row, replaced or not.
+  const live = (submissions ?? []).filter((s: any) => !s.superseded_by);
 
   const itemsByTemplate = new Map<string, number>();
   for (const i of items ?? []) {
@@ -79,8 +82,8 @@ export async function GET(request: Request) {
   // Per-outlet, today.
   const outletStats = (outlets ?? []).map((o) => {
     const expected = expectedFor((r) => r.outlet_id === o.id && r.run_date === today);
-    const done = (submissions ?? []).filter(
-      (s) => s.outlet_id === o.id && runById.get(s.run_id)?.run_date === today
+    const done = live.filter(
+      (s: any) => s.outlet_id === o.id && runById.get(s.run_id)?.run_date === today
     ).length;
     const lockedNow = (locks ?? []).filter((l) => l.outlet_id === o.id).length;
     return {
@@ -96,8 +99,8 @@ export async function GET(request: Request) {
     day.setDate(day.getDate() - d);
     const date = day.toISOString().slice(0, 10);
     const expected = expectedFor((r) => r.run_date === date);
-    const done = (submissions ?? []).filter(
-      (s) => runById.get(s.run_id)?.run_date === date
+    const done = live.filter(
+      (s: any) => runById.get(s.run_id)?.run_date === date
     ).length;
     trend.push({
       date, done, expected,
@@ -119,8 +122,8 @@ export async function GET(request: Request) {
   });
 
   const todayExpected = expectedFor((r) => r.run_date === today);
-  const todayDone = (submissions ?? []).filter(
-    (s) => runById.get(s.run_id)?.run_date === today
+  const todayDone = live.filter(
+    (s: any) => runById.get(s.run_id)?.run_date === today
   ).length;
 
   return json({
@@ -134,19 +137,19 @@ export async function GET(request: Request) {
       lockedNow: (locks ?? []).length,
       escalated: (locks ?? []).filter((l) => l.escalation_level > 0).length,
       outOfRange: (submissions ?? []).filter((s) => s.out_of_bounds).length,
-      late: (submissions ?? []).filter((s) => s.was_late).length,
-      waived: (submissions ?? []).filter((s) => s.status === 'waived').length,
-      byManager: (submissions ?? []).filter((s) => s.status === 'completed_by_manager').length,
+      late: live.filter((s: any) => s.was_late).length,
+      waived: live.filter((s: any) => s.status === 'waived').length,
+      byManager: live.filter((s: any) => s.status === 'completed_by_manager').length,
     },
     outlets: outletStats,
     trend,
     outOfRange: (submissions ?? []).filter((s) => s.out_of_bounds)
       .sort((a, b) => +new Date(b.submitted_at) - +new Date(a.submitted_at))
       .slice(0, 20).map(shape),
-    waived: (submissions ?? []).filter((s) => s.status === 'waived')
+    waived: live.filter((s: any) => s.status === 'waived')
       .sort((a, b) => +new Date(b.submitted_at) - +new Date(a.submitted_at))
       .slice(0, 20).map(shape),
-    byManager: (submissions ?? []).filter((s) => s.status === 'completed_by_manager')
+    byManager: live.filter((s: any) => s.status === 'completed_by_manager')
       .sort((a, b) => +new Date(b.submitted_at) - +new Date(a.submitted_at))
       .slice(0, 20).map(shape),
     lockedItems: (locks ?? []).map((l) => ({

@@ -29,6 +29,8 @@ export async function POST(request: Request) {
   const comment = (form.get('comment') as string) || null;
   const rawValue = form.get('value') as string | null;
   const capturedAt = form.get('capturedAt') as string | null;
+  // Re-taking a reading: the id of the submission this one replaces.
+  const supersedesId = (form.get('supersedesId') as string) || null;
   const photo = form.get('photo') as File | null;
 
   if (!isUuid(submissionId) || !isUuid(runId) || !isUuid(itemId)) {
@@ -156,6 +158,42 @@ export async function POST(request: Request) {
     }
   }
 
+  // Replacing an earlier reading — a fridge pushed back into range, then
+  // re-checked. The original row is kept and marked superseded, never edited or
+  // deleted: a reading that was out of range is exactly the thing an inspector
+  // needs to see, along with what was done about it.
+  if (supersedesId) {
+    if (!isUuid(supersedesId)) {
+      return json({ error: 'Invalid request.' }, { status: 400 });
+    }
+
+    const { data: previous } = await db
+      .from('submissions')
+      .select('id, superseded_by')
+      .eq('id', supersedesId)
+      .eq('run_id', run.id)
+      .eq('checklist_item_id', item.id)
+      .maybeSingle();
+
+    if (!previous) {
+      return json({ error: 'That reading no longer exists.' }, { status: 404 });
+    }
+    if (previous.superseded_by) {
+      return json({ error: 'That reading has already been replaced.' }, { status: 409 });
+    }
+
+    // Must happen before the insert: only one live submission per item is
+    // allowed, so the old one has to step aside first.
+    const { error: supersedeError } = await db
+      .from('submissions')
+      .update({ superseded_by: submissionId })
+      .eq('id', supersedesId)
+      .is('superseded_by', null);
+    if (supersedeError) {
+      return json({ error: supersedeError.message }, { status: 500 });
+    }
+  }
+
   const dueAt = addMinutes(run.starts_at, item.due_offset_minutes);
   const wasLate = now > dueAt;
 
@@ -177,6 +215,14 @@ export async function POST(request: Request) {
   });
 
   if (insertError) {
+    // Put the previous reading back if the replacement failed to save, so the
+    // task does not end up with no live submission at all.
+    if (supersedesId) {
+      await db.from('submissions')
+        .update({ superseded_by: null })
+        .eq('id', supersedesId);
+    }
+
     // The unique index means a second device completing the same item loses
     // the race. That is correct behaviour, and the message should say so
     // plainly rather than looking like a failure.

@@ -494,6 +494,18 @@ function ItemCard({ item, timezone, onOpen }: {
         </div>
       )}
 
+      {item.state === 'done' && item.submission?.outOfBounds && (
+        <>
+          <div className="banner error" style={{ marginTop: 12, marginBottom: 0 }}>
+            This reading is outside the safe range and your manager has been told.
+            Fix the problem, then take the reading again.
+          </div>
+          <button className="btn-primary" style={{ marginTop: 12 }} onClick={onOpen}>
+            Re-check and enter a new reading
+          </button>
+        </>
+      )}
+
       {(item.state === 'todo' || item.state === 'unlocked') && (
         <button className="btn-primary" style={{ marginTop: 12 }} onClick={onOpen}>
           {item.proof === 'photo' || item.photoMode === 'required'
@@ -529,6 +541,11 @@ function SubmitSheet({ run, item, onClose, onDone }: {
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
+  // Replacing an earlier out-of-range reading rather than recording a first one.
+  const replacing = item.state === 'done' && item.submission?.outOfBounds
+    ? item.submission.id
+    : null;
+
   const outOfRange =
     item.proof === 'number' && value !== '' &&
     ((item.minValue !== null && Number(value) < item.minValue) ||
@@ -558,6 +575,7 @@ function SubmitSheet({ run, item, onClose, onDone }: {
       if (comment) form.set('comment', comment);
       if (photo) form.set('photo', photo);
       if (capturedAt) form.set('capturedAt', capturedAt);
+      if (replacing) form.set('supersedesId', replacing);
 
       const res = await fetch('/api/staff/submit', { method: 'POST', body: form });
       const data = await res.json();
@@ -580,9 +598,16 @@ function SubmitSheet({ run, item, onClose, onDone }: {
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <h3>{item.title}</h3>
+        <h3>{replacing ? `Re-check: ${item.title}` : item.title}</h3>
         {item.description && <p className="lede">{item.description}</p>}
         {error && <div className="banner error">{error}</div>}
+
+        {replacing && (
+          <div className="banner info">
+            Previous reading: <strong>{item.submission?.valueNumber}{item.unit ?? ''}</strong>.
+            That record is kept — this adds a new one alongside it.
+          </div>
+        )}
 
         {(item.proof === 'photo' || item.photoMode !== 'none') && (
           <>
@@ -636,7 +661,7 @@ function SubmitSheet({ run, item, onClose, onDone }: {
         <div className="btn-row" style={{ marginTop: 18 }}>
           <button className="btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
           <button className="btn-primary" onClick={submit} disabled={!canSubmit}>
-            {busy ? 'Saving…' : 'Complete'}
+            {busy ? 'Saving…' : replacing ? 'Save new reading' : 'Complete'}
           </button>
         </div>
       </div>

@@ -61,7 +61,7 @@ export async function GET(request: Request) {
     db.from('submissions')
       // Named relationship: submissions references users twice.
       .select('*, users!submissions_user_id_fkey(name, role_id)')
-      .in('run_id', runIds).is('superseded_by', null)
+      .in('run_id', runIds)
       .then((r) => unwrap<any[]>(r, 'submissions')),
     db.from('item_locks').select('*').in('run_id', runIds).neq('state', 'resolved')
       .then((r) => unwrap<any[]>(r, 'item locks')),
@@ -70,8 +70,11 @@ export async function GET(request: Request) {
   const itemById = new Map((items ?? []).map((i) => [i.id, i]));
   const outletById = new Map((outlets ?? []).map((o) => [o.id, o]));
   const roleById = new Map((roles ?? []).map((r) => [r.id, r]));
+  // Superseded rows still count as "this item was done", but they are excluded
+  // from the approval queue below so a replaced reading is not reviewed twice.
+  const live = (submissions ?? []).filter((s) => !s.superseded_by);
   const submittedKeys = new Set(
-    (submissions ?? []).map((s) => `${s.run_id}:${s.checklist_item_id}`)
+    live.map((s) => `${s.run_id}:${s.checklist_item_id}`)
   );
 
   // Frozen and unlocked items.
@@ -117,7 +120,7 @@ export async function GET(request: Request) {
                     (new Date(a.lockedAt).getTime() - new Date(b.lockedAt).getTime()));
 
   // Submissions awaiting approval.
-  const review = (submissions ?? [])
+  const review = live
     .filter((s) => s.status === 'submitted' && itemById.get(s.checklist_item_id)?.requires_approval)
     .map((s) => shapeSubmission(s, itemById, outletById, runById))
     .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
@@ -176,5 +179,6 @@ function shapeSubmission(s: any, itemById: Map<string, any>, outletById: Map<str
     outOfBounds: s.out_of_bounds,
     wasLate: s.was_late,
     submittedAt: s.submitted_at,
+    replaced: Boolean(s.superseded_by),
   };
 }

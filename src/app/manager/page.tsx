@@ -26,6 +26,7 @@ interface ReviewItem {
   valueNumber: number | null; valueText: string | null;
   photoPath: string | null; comment: string | null;
   status: string; outOfBounds: boolean; wasLate: boolean; submittedAt: string;
+  replaced?: boolean;
 }
 
 interface OutletStat {
@@ -517,6 +518,9 @@ function ReviewSheet({ item, canReview, onClose, onDone }: {
 // --------------------------------------------------------------------------
 
 function statusLabel(s: ReviewItem): string {
+  // A replaced reading still shows, so re-taking one cannot quietly clear the
+  // alert; it just says what happened next.
+  if (s.outOfBounds && s.replaced) return 'Out of range · re-checked';
   if (s.outOfBounds) return 'Out of range';
   if (s.status === 'approved') return 'Approved';
   if (s.status === 'rejected') return 'Sent back';
