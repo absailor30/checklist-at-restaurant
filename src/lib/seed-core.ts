@@ -18,7 +18,7 @@ export const DEMO_ORG = 'Spice Garden Restaurants';
 export const DEMO_PIN = '1234';
 export const DEMO_MANAGER_PASSWORD = 'demo-manager-2026';
 export const DEMO_EMAIL_DOMAIN = 'spicegarden.demo';
-const HISTORY_DAYS = 14;
+const HISTORY_DAYS = 7;
 
 const OUTLETS = [
   { name: 'Spice Garden — Koramangala', address: '80 Feet Road, Koramangala' },
@@ -27,20 +27,28 @@ const OUTLETS = [
 ];
 
 const STAFF = [
-  { name: 'Ramesh Kumar',   role: 'Kitchen Staff',   outlet: 0 },
-  { name: 'Anita Desai',    role: 'Kitchen Staff',   outlet: 0 },
-  { name: 'Suresh Patil',   role: 'Service Staff',   outlet: 0 },
-  { name: 'Meena Iyer',     role: 'Service Staff',   outlet: 0 },
-  { name: 'Vikram Singh',   role: 'Bar Staff',       outlet: 0 },
-  { name: 'Priya Nair',     role: 'Shift Manager',   outlet: 0 },
-  { name: 'Arjun Reddy',    role: 'Kitchen Staff',   outlet: 1 },
-  { name: 'Kavya Menon',    role: 'Service Staff',   outlet: 1 },
-  { name: 'Rahul Sharma',   role: 'Shift Manager',   outlet: 1 },
-  { name: 'Deepa Krishnan', role: 'Kitchen Staff',   outlet: 2 },
-  { name: 'Sanjay Gupta',   role: 'Service Staff',   outlet: 2 },
-  { name: 'Farah Khan',     role: 'Shift Manager',   outlet: 2 },
-  { name: 'Nikhil Rao',     role: 'General Manager', outlet: null },
-  { name: 'Lakshmi Venkat', role: 'Owner',           outlet: null },
+  { name: 'Ramesh Kumar',   role: 'Kitchen',              outlet: 0 },
+  { name: 'Anita Desai',    role: 'Kitchen',              outlet: 0 },
+  { name: 'Suresh Patil',   role: 'Service',              outlet: 0 },
+  { name: 'Meena Iyer',     role: 'Front Office',         outlet: 0 },
+  { name: 'Vikram Singh',   role: 'Bar & Beverage',       outlet: 0 },
+  { name: 'Lata Joshi',     role: 'Housekeeping',         outlet: 0 },
+  { name: 'Priya Nair',     role: 'Shift Manager',        outlet: 0 },
+  { name: 'Arjun Reddy',    role: 'Kitchen',              outlet: 1 },
+  { name: 'Kavya Menon',    role: 'Service',              outlet: 1 },
+  { name: 'Imran Shaikh',   role: 'Stores & Purchasing',  outlet: 1 },
+  { name: 'Rahul Sharma',   role: 'Shift Manager',        outlet: 1 },
+  { name: 'Deepa Krishnan', role: 'Kitchen',              outlet: 2 },
+  { name: 'Sanjay Gupta',   role: 'Front Office',         outlet: 2 },
+  { name: 'Farah Khan',     role: 'Shift Manager',        outlet: 2 },
+  { name: 'Neha Bhat',      role: 'Back Office',          outlet: null },
+  { name: 'Rohit Verma',    role: 'IT & Systems',         outlet: null },
+  { name: 'Aisha Qureshi',  role: 'Customer Support',     outlet: null },
+  { name: 'Vivek Rao',      role: 'Sales & Marketing',    outlet: null },
+  { name: 'Ganesh Pillai',  role: 'Maintenance & Safety', outlet: null },
+  { name: 'Sunita Kaur',    role: 'People & HR',          outlet: null },
+  { name: 'Nikhil Rao',     role: 'General Manager',      outlet: null },
+  { name: 'Lakshmi Venkat', role: 'Owner',                outlet: null },
 ];
 
 export interface SeedResult {
