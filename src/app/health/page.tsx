@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ThemeSwitcher } from '@/components/theme-switcher';
 
 // Readable status page. When something is broken, the person looking at it is
 // probably not a developer, so each line says what to do about it.
@@ -42,6 +43,9 @@ export default function HealthPage() {
           </div>
         </div>
       ))}
+
+      <h2 style={{ fontSize: 16, marginTop: 28 }}>Appearance</h2>
+      <ThemeSwitcher />
 
       <div className="btn-row" style={{ marginTop: 20 }}>
         <a className="btn btn-ghost" href="/setup"

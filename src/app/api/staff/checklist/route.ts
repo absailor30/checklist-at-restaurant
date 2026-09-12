@@ -98,6 +98,7 @@ export async function GET() {
           description: i.description,
           proof: i.proof,
           proofRequired: i.proof_required,
+          photoMode: i.photo_mode ?? 'none',
           requiresApproval: i.requires_approval,
           unit: i.unit,
           minValue: i.min_value,

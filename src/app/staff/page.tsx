@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ThemeSwitcher } from '@/components/theme-switcher';
 
 // The floor-staff flow, as one screen with steps: pick outlet (once per
 // device) -> pick your name -> PIN -> pick your shift -> checklist.
@@ -19,6 +20,7 @@ interface Item {
   id: string; title: string; description: string | null;
   proof: 'none' | 'photo' | 'number' | 'text';
   proofRequired: boolean; requiresApproval: boolean;
+  photoMode: 'none' | 'optional' | 'required';
   unit: string | null; minValue: number | null; maxValue: number | null;
   dueAt: string;
   state: 'todo' | 'done' | 'locked' | 'unlocked' | 'waived';
@@ -228,6 +230,13 @@ export default function StaffPage() {
             <span className="chev">›</span>
           </button>
         ))}
+
+        <h2 style={{ fontSize: 16, marginTop: 28 }}>Appearance</h2>
+        <p className="lede" style={{ fontSize: 13 }}>
+          Set once for this device. Choose the colour-blind friendly set if
+          red and green are hard to tell apart.
+        </p>
+        <ThemeSwitcher />
       </Screen>
     );
   }
@@ -405,6 +414,8 @@ function ItemCard({ item, timezone, onOpen }: {
           <div className="due">
             Due {fmt(due, timezone)}
             {item.proof !== 'none' && ` · ${proofLabel(item)}`}
+            {item.photoMode !== 'none' && item.proof !== 'photo' &&
+              ` · photo ${item.photoMode === 'required' ? 'required' : 'optional'}`}
             {item.requiresApproval && ' · needs manager approval'}
           </div>
         </div>
@@ -473,7 +484,9 @@ function ItemCard({ item, timezone, onOpen }: {
 
       {(item.state === 'todo' || item.state === 'unlocked') && (
         <button className="btn-primary" style={{ marginTop: 12 }} onClick={onOpen}>
-          {item.proof === 'photo' ? 'Take photo & complete' : 'Mark complete'}
+          {item.proof === 'photo' || item.photoMode === 'required'
+            ? 'Take photo & complete'
+            : 'Mark complete'}
         </button>
       )}
     </div>
@@ -548,6 +561,7 @@ function SubmitSheet({ run, item, onClose, onDone }: {
   const canSubmit =
     !busy &&
     !(item.proof === 'photo' && item.proofRequired && !photo) &&
+    !(item.photoMode === 'required' && !photo) &&
     !(item.proof === 'number' && item.proofRequired && value === '') &&
     !(item.proof === 'text' && item.proofRequired && !comment.trim() && !value.trim());
 
@@ -558,12 +572,18 @@ function SubmitSheet({ run, item, onClose, onDone }: {
         {item.description && <p className="lede">{item.description}</p>}
         {error && <div className="banner error">{error}</div>}
 
-        {item.proof === 'photo' && (
+        {(item.proof === 'photo' || item.photoMode !== 'none') && (
           <>
             {/* capture="environment" opens the phone's own camera app, which
                 gives far better image quality than an in-browser camera. */}
             <input ref={fileInput} type="file" accept="image/*" capture="environment"
               onChange={pick} style={{ display: 'none' }} />
+            {item.proof !== 'photo' && (
+              <label>
+                Photo of the display
+                {item.photoMode === 'required' ? '' : ' (optional)'}
+              </label>
+            )}
             <button className="btn-ghost" onClick={() => fileInput.current?.click()}>
               {photo ? 'Retake photo' : 'Open camera'}
             </button>

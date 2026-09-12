@@ -89,24 +89,37 @@ const browser = await chromium.launch({
 });
 const report = {};
 
-for (const scheme of ['light', 'dark']) {
+// Every theme in every scheme: a palette that passes in one can fail in
+// another, and the colour-blind theme exists precisely for the people least
+// able to work around a mistake in it.
+const variants = [
+  { name: 'light', scheme: 'light', theme: null },
+  { name: 'dark', scheme: 'dark', theme: null },
+  { name: 'cvd-light', scheme: 'light', theme: 'cvd' },
+  { name: 'cvd-dark', scheme: 'dark', theme: 'cvd' },
+];
+
+for (const variant of variants) {
   const context = await browser.newContext({
-    colorScheme: scheme,
+    colorScheme: variant.scheme,
     viewport: { width: 430, height: 2400 },
     deviceScaleFactor: 2,
   });
   const page = await context.newPage();
   await page.goto(fixture);
+  if (variant.theme) {
+    await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), variant.theme);
+  }
   await page.waitForTimeout(300);
 
-  report[scheme] = await page.evaluate(audit);
-  await page.screenshot({ path: `${out}-${scheme}.png`, fullPage: true });
+  report[variant.name] = await page.evaluate(audit);
+  await page.screenshot({ path: `${out}-${variant.name}.png`, fullPage: true });
   await context.close();
 }
 
 await browser.close();
 
-for (const scheme of ['light', 'dark']) {
+for (const scheme of Object.keys(report)) {
   const fails = report[scheme];
   console.log(`\n=== ${scheme.toUpperCase()} — ${fails.length} contrast failures ===`);
   for (const f of fails) {
@@ -115,5 +128,5 @@ for (const scheme of ['light', 'dark']) {
   }
 }
 
-const total = report.light.length + report.dark.length;
+const total = Object.values(report).reduce((n, f) => n + f.length, 0);
 console.log(`\nTOTAL FAILURES: ${total}`);

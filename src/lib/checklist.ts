@@ -15,6 +15,9 @@ export interface ItemView {
   description: string | null;
   proof: 'none' | 'photo' | 'number' | 'text';
   proofRequired: boolean;
+  // A photo in addition to the primary proof, e.g. a picture of the fridge
+  // display beside the temperature that was typed in.
+  photoMode: 'none' | 'optional' | 'required';
   requiresApproval: boolean;
   unit: string | null;
   minValue: number | null;

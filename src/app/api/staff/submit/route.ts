@@ -111,6 +111,16 @@ export async function POST(request: Request) {
     return json({ error: 'A photo is required.' }, { status: 400 });
   }
 
+  // A photo can also accompany a reading or a note. A fridge log wants the
+  // number to trend and the picture of the display that proves the number was
+  // read off the unit rather than invented at the end of the shift.
+  if (item.photo_mode === 'required' && !photo) {
+    return json(
+      { error: 'Photograph the display as well as entering the reading.' },
+      { status: 400 }
+    );
+  }
+
   // Photo freshness. This raises the cost of submitting an old picture from
   // the gallery; it does not make it impossible, and that trade-off was taken
   // deliberately in exchange for the far better image quality the phone's own

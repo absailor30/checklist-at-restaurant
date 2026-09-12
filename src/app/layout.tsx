@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { themeBootScript } from '@/components/theme-switcher';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -22,6 +23,11 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        {/* Runs before the first paint so a chosen theme does not flash the
+            default one on every page load. */}
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
       <body>{children}</body>
     </html>
   );

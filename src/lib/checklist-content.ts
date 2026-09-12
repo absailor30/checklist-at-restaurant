@@ -8,12 +8,16 @@
 // expected, which is exactly why they are data.
 
 export type SeedProof = 'none' | 'photo' | 'number' | 'text';
+export type SeedPhotoMode = 'none' | 'optional' | 'required';
 
 export interface SeedItem {
   title: string;
   description?: string;
   proof: SeedProof;
   proofRequired?: boolean;
+  // A photo alongside the primary proof. A temperature log wants both: the
+  // number to trend, and a picture of the display showing it.
+  photoMode?: SeedPhotoMode;
   requiresApproval?: boolean;
   dueOffsetMinutes: number;
   min?: number;
@@ -36,17 +40,20 @@ export const SEED_TEMPLATES: SeedTemplate[] = [
     items: [
       {
         title: 'Walk-in fridge temperature',
+        photoMode: 'required',
         description: 'Read the display and photograph it. Report immediately if outside range.',
         proof: 'number', proofRequired: true, requiresApproval: true,
         dueOffsetMinutes: 20, min: 0, max: 5, unit: '°C',
       },
       {
         title: 'Freezer temperature',
+        photoMode: 'required',
         proof: 'number', proofRequired: true, requiresApproval: true,
         dueOffsetMinutes: 20, min: -25, max: -15, unit: '°C',
       },
       {
         title: 'Hot holding unit up to temperature',
+        photoMode: 'required',
         proof: 'number', proofRequired: true,
         dueOffsetMinutes: 45, min: 63, max: 95, unit: '°C',
       },
@@ -101,6 +108,7 @@ export const SEED_TEMPLATES: SeedTemplate[] = [
       },
       {
         title: 'Closing fridge and freezer temperatures',
+        photoMode: 'required',
         proof: 'number', proofRequired: true,
         dueOffsetMinutes: 140, min: 0, max: 5, unit: '°C',
       },
@@ -123,6 +131,7 @@ export const SEED_TEMPLATES: SeedTemplate[] = [
       },
       {
         title: 'Food waste log completed (kg)',
+        photoMode: 'optional',
         proof: 'number', proofRequired: true,
         dueOffsetMinutes: 145, min: 0, max: 100, unit: 'kg',
       },
@@ -139,7 +148,7 @@ export const SEED_TEMPLATES: SeedTemplate[] = [
       { title: 'Cutlery and glassware polished', proof: 'none', dueOffsetMinutes: 45 },
       { title: 'Entrance and signage clean, lights working', proof: 'photo', dueOffsetMinutes: 30 },
       { title: 'POS terminal and card machine tested', proof: 'none', dueOffsetMinutes: 20 },
-      { title: 'Opening cash float counted', proof: 'number', proofRequired: true, requiresApproval: true, dueOffsetMinutes: 15, min: 0, max: 100000, unit: '₹' },
+      { title: 'Opening cash float counted', photoMode: 'optional', proof: 'number', proofRequired: true, requiresApproval: true, dueOffsetMinutes: 15, min: 0, max: 100000, unit: '₹' },
       { title: "Today's specials and out-of-stock items briefed", proof: 'text', dueOffsetMinutes: 50 },
     ],
   },
@@ -150,7 +159,7 @@ export const SEED_TEMPLATES: SeedTemplate[] = [
     items: [
       { title: 'Washrooms re-checked and restocked', proof: 'photo', proofRequired: true, dueOffsetMinutes: 60 },
       { title: 'Dining area tidied, tables reset', proof: 'none', dueOffsetMinutes: 90 },
-      { title: 'Hot holding temperature re-check', proof: 'number', proofRequired: true, dueOffsetMinutes: 120, min: 63, max: 95, unit: '°C' },
+      { title: 'Hot holding temperature re-check', photoMode: 'required', proof: 'number', proofRequired: true, dueOffsetMinutes: 120, min: 63, max: 95, unit: '°C' },
       { title: 'Bins in dining area emptied', proof: 'none', dueOffsetMinutes: 100 },
       { title: 'Stock levels of drinks checked', proof: 'none', dueOffsetMinutes: 110 },
     ],
@@ -160,7 +169,7 @@ export const SEED_TEMPLATES: SeedTemplate[] = [
     shift: 'Closing',
     title: 'Front of House Closing',
     items: [
-      { title: 'Cash counted and reconciled against POS', proof: 'number', proofRequired: true, requiresApproval: true, dueOffsetMinutes: 150, min: 0, max: 1000000, unit: '₹' },
+      { title: 'Cash counted and reconciled against POS', photoMode: 'required', proof: 'number', proofRequired: true, requiresApproval: true, dueOffsetMinutes: 150, min: 0, max: 1000000, unit: '₹' },
       { title: 'Card machine settled and receipt filed', proof: 'photo', proofRequired: true, requiresApproval: true, dueOffsetMinutes: 150 },
       { title: 'Tables cleared, dining floor mopped', proof: 'photo', proofRequired: true, dueOffsetMinutes: 160 },
       { title: 'Washrooms final clean', proof: 'photo', proofRequired: true, dueOffsetMinutes: 155 },
@@ -174,7 +183,7 @@ export const SEED_TEMPLATES: SeedTemplate[] = [
     shift: 'Opening',
     title: 'Bar Opening',
     items: [
-      { title: 'Bar fridge temperature', proof: 'number', proofRequired: true, dueOffsetMinutes: 20, min: 0, max: 5, unit: '°C' },
+      { title: 'Bar fridge temperature', photoMode: 'required', proof: 'number', proofRequired: true, dueOffsetMinutes: 20, min: 0, max: 5, unit: '°C' },
       { title: 'Ice machine cleaned and stocked', proof: 'photo', proofRequired: true, dueOffsetMinutes: 35 },
       { title: 'Beer lines checked, no leaks', proof: 'none', dueOffsetMinutes: 40 },
       { title: 'Garnishes prepped and covered', proof: 'photo', dueOffsetMinutes: 50 },

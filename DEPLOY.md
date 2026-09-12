@@ -228,3 +228,29 @@ trail, and a record pointing at a deleted person is worth nothing in a dispute.
 trend across the period, and every out-of-range reading, waiver and manager
 completion. **Download CSV** exports the full record for an inspection;
 **Print summary** produces a paper copy of the dashboard.
+
+---
+
+## Appearance
+
+Two colour sets, chosen per device under **Appearance** on the outlet picker
+and on `/health`:
+
+- **Standard** — the default warm palette.
+- **Colour-blind friendly** — blue, amber and vermillion, derived from the
+  Okabe-Ito set. The adjacent pairs were checked with a colour-vision simulator
+  rather than judged by eye: the worst pair separates by ΔE 13.1 under
+  deuteranopia and 15.6 in normal vision.
+
+Each can be forced to light or dark, or left to follow the phone.
+
+In every theme, status carries a symbol and a word as well as a colour
+(✓ done, ! attention, ✕ locked, ○ to do), so the app is readable to someone who
+cannot separate the hues at all, and in a black-and-white printout.
+
+## Verification
+
+`bash scripts/verify.sh` runs the whole suite: typecheck, production build,
+every migration applied twice to a throwaway PostgreSQL database, the demo
+seeder's rows applied to a real schema, all routes rendered in a browser, and a
+WCAG contrast check on every text node in all four theme variants.
