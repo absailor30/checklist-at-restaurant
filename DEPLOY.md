@@ -188,13 +188,18 @@ task needs to reach a manager.
 2. Vercel → Settings → Environment Variables → add `CRON_SECRET` as a **Secret**
    with that value, then redeploy. `/health` shows whether it is set.
 
-`vercel.json` already schedules `/api/cron/refresh` hourly.
+`vercel.json` schedules `/api/cron/refresh` once a day, at 02:00 UTC.
 
-### Getting a shorter interval than hourly
+**The daily schedule is not a preference — it is the Hobby plan's limit, and
+exceeding it breaks deployment entirely.** A schedule that would run more than
+once a day is rejected by the Vercel API with `cron_jobs_limits_reached`, and
+the whole deployment fails rather than just the cron. An hourly expression here
+silently stopped every deployment for an hour before the cause was found.
 
-Vercel's Hobby plan runs cron jobs at most once a day, so the hourly schedule in
-`vercel.json` only takes effect on a paid plan. For finer granularity without
-paying, point a free external scheduler (cron-job.org, EasyCron, or a GitHub
+### Getting a shorter interval than daily
+
+Once a day is far too coarse for a missed closing task to reach anyone
+usefully. Point a free external scheduler (cron-job.org, EasyCron, or a GitHub
 Actions schedule) at the same endpoint every 15 minutes:
 
 ```
