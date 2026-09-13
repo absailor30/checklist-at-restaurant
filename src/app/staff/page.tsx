@@ -1,14 +1,16 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { L1_HARD_STOP, L1_QUESTIONS, STATIONS, type LineCheckQuestion } from '@/lib/line-check/questions';
-import {
-  canAdvance,
-  scoreAnswer,
-  type LineCheckAnswer,
-  type YesNoNa,
-} from '@/lib/line-check/score-answer';
+import { canAdvance, scoreAnswer, type LineCheckAnswer, type YesNoNa } from '@/lib/line-check/score-answer';
 import { bandOf } from '@/lib/scoring';
+import { ThemeSwitcher } from '@/components/theme-switcher';
+import { NotificationBell } from '@/components/notifications';
+
+type Step = 'outlet' | 'staff' | 'pin' | 'list';
+
+interface Outlet { id: string; name: string; org_id: string; timezone: string }
+interface Staff { id: string; name: string; role: string; level: number; needsPin: boolean }
 
 type StationStatus = 'idle' | 'in_progress' | 'paused' | 'complete';
 
@@ -48,7 +50,23 @@ function stationScore(answers: Record<string, LineCheckAnswer>) {
   return { scored, points, waived, percent, band: scored ? bandOf(percent) : 'Poor' };
 }
 
+const OUTLET_KEY = 'checklist.outletId';
+
 export default function StaffLineCheckPage() {
+  const [step, setStep] = useState<Step>('outlet');
+  const [outlets, setOutlets] = useState<Outlet[]>([]);
+  const [outlet, setOutlet] = useState<Outlet | null>(null);
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [person, setPerson] = useState<Staff | null>(null);
+  const [me, setMe] = useState<{ name: string; role?: string } | null>(null);
+  const [timezone, setTimezone] = useState('Asia/Kolkata');
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [loadingOutlets, setLoadingOutlets] = useState(true);
+  const [diagnostic, setDiagnostic] = useState<string | null>(null);
+
+  // Line Check state
   const [stations, setStations] = useState<Record<number, StationState>>({
     1: emptyStation(),
     2: emptyStation(),
@@ -56,7 +74,97 @@ export default function StaffLineCheckPage() {
   });
   const [active, setActive] = useState<number | null>(null);
   const [pauseDraft, setPauseDraft] = useState('');
-  const [error, setError] = useState<string | null>(null);
+
+  // --- device setup -------------------------------------------------------
+
+  useEffect(() => {
+    (async () => {
+      const ask = (attempt: number) =>
+        fetch(`/api/staff/outlets?t=${Date.now()}-${attempt}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' },
+        });
+
+      let res = await ask(1);
+      let data = await res.json().catch(() => ({}));
+
+      if (res.ok && (data.outlets ?? []).length === 0) {
+        await new Promise((r) => setTimeout(r, 400));
+        res = await ask(2);
+        data = await res.json().catch(() => ({}));
+      }
+
+      setDiagnostic(
+        `server returned ${(data.outlets ?? []).length} outlets ` +
+        `of ${data.totalRows ?? 0} rows` +
+        (data.serverTime ? ` at ${new Date(data.serverTime).toLocaleTimeString()}` : '')
+      );
+
+      if (!res.ok) {
+        setError(data.error ?? `The server returned an error (${res.status}).`);
+        setLoadingOutlets(false);
+        return;
+      }
+      const list: Outlet[] = data.outlets ?? [];
+      setOutlets(list);
+      setLoadingOutlets(false);
+
+      const saved = localStorage.getItem(OUTLET_KEY);
+      const found = list.find((o) => o.id === saved);
+      if (found) {
+        setOutlet(found);
+        setTimezone(found.timezone);
+        void loadStaff(found);
+      }
+    })().catch(() => {
+      setError('Could not reach the server. Check your connection and reload.');
+      setLoadingOutlets(false);
+    });
+  }, []);
+
+  const loadStaff = useCallback(async (o: Outlet) => {
+    const res = await fetch(`/api/staff/login?outletId=${o.id}&t=${Date.now()}`, { cache: 'no-store' });
+    const data = await res.json();
+    setStaff(data.staff ?? []);
+    setStep('staff');
+  }, []);
+
+  function chooseOutlet(o: Outlet) {
+    localStorage.setItem(OUTLET_KEY, o.id);
+    setOutlet(o);
+    setTimezone(o.timezone);
+    void loadStaff(o);
+  }
+
+  // --- sign in ------------------------------------------------------------
+
+  async function submitPin(value: string) {
+    if (!person || !outlet) return;
+    setBusy(true); setError(null);
+    try {
+      const res = await fetch('/api/staff/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: person.id, outletId: outlet.id, pin: value }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error); setPin(''); return; }
+
+      // Logged in!
+      setMe({ name: person.name, role: person.role });
+      setStep('list');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function signOut() {
+    await fetch('/api/staff/logout', { method: 'POST' });
+    setPerson(null); setPin(''); setMe(null);
+    setStep('staff');
+  }
+
+  // --- line check logic ---------------------------------------------------
 
   const overall = useMemo(() => {
     const parts = STATIONS.map((s) => stationScore(stations[s.id].answers));
@@ -80,14 +188,63 @@ export default function StaffLineCheckPage() {
     setActive(id);
   }
 
-  function pauseStation(id: number) {
+  async function syncStation(id: number, status: StationStatus, pReason: string = '') {
+    const st = stations[id];
+    const form = new FormData();
+    form.append('stationNo', id.toString());
+    form.append('status', status);
+    if (pReason) form.append('pauseReason', pReason);
+
+    // Extract photos and clear dataUrls from JSON
+    const answersArray = [];
+    for (const [qId, a] of Object.entries(st.answers)) {
+      if (a.photoDataUrl) {
+        try {
+          const res = await fetch(a.photoDataUrl);
+          const blob = await res.blob();
+          form.append(`photo_${qId}`, blob, `photo_${qId}.jpg`);
+        } catch (e) {
+          console.error("Failed to extract photo for", qId);
+        }
+      }
+      answersArray.push({
+        questionId: qId,
+        yesNo: a.yesNo,
+        value: a.value,
+        reason: a.reason,
+      });
+    }
+
+    form.append('answers', JSON.stringify(answersArray));
+
+    setBusy(true);
+    try {
+      const res = await fetch('/api/staff/line-check/sync', { method: 'POST', body: form });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error || 'Failed to sync station');
+        return false;
+      }
+      return true;
+    } catch (e) {
+      setError('Network error syncing station');
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function pauseStation(id: number) {
     if (!pauseDraft.trim()) {
       setError('Pause needs a reason so L3 can see why the station stalled.');
       return;
     }
-    patch(id, (s) => ({ ...s, status: 'paused', pauseReason: pauseDraft.trim() }));
-    setPauseDraft('');
-    setActive(null);
+    const success = await syncStation(id, 'paused', pauseDraft.trim());
+    if (success) {
+      patch(id, (s) => ({ ...s, status: 'paused', pauseReason: pauseDraft.trim() }));
+      setPauseDraft('');
+      setActive(null);
+    }
   }
 
   function setAnswer(id: number, q: LineCheckQuestion, partial: Partial<LineCheckAnswer>) {
@@ -97,7 +254,7 @@ export default function StaffLineCheckPage() {
     });
   }
 
-  function next(id: number, q: LineCheckQuestion) {
+  async function next(id: number, q: LineCheckQuestion) {
     const st = stations[id];
     const a = st.answers[q.id];
     if (!canAdvance(q, a)) {
@@ -106,12 +263,118 @@ export default function StaffLineCheckPage() {
     }
     setError(null);
     if (st.index >= L1_QUESTIONS.length - 1) {
-      patch(id, (s) => ({ ...s, status: 'complete', index: s.index }));
-      setActive(null);
+      // Completed!
+      const success = await syncStation(id, 'complete');
+      if (success) {
+        patch(id, (s) => ({ ...s, status: 'complete', index: s.index }));
+        setActive(null);
+      }
       return;
     }
+    // Advance local state
     patch(id, (s) => ({ ...s, index: s.index + 1, status: 'in_progress' }));
   }
+
+  // --- render -------------------------------------------------------------
+
+  if (step === 'outlet') {
+    return (
+      <Screen title="Choose this device's outlet" lede="You only need to do this once on this device.">
+        {error && <div className="banner error">{error}</div>}
+        {loadingOutlets && <div className="spinner" />}
+        {!loadingOutlets && outlets.length === 0 && !error && (
+          <div className="card">
+            <strong>No outlets set up yet</strong>
+            <p className="lede" style={{ margin: '8px 0 14px' }}>
+              The database is reachable but returned no restaurants. Create the
+              demo data first, then come back here.
+            </p>
+            {diagnostic && (
+              <p className="lede" style={{ fontSize: 12, margin: '0 0 14px' }}>
+                {diagnostic}
+              </p>
+            )}
+            <a className="btn btn-primary" href="/setup"
+               style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
+              Go to setup
+            </a>
+          </div>
+        )}
+        {outlets.map((o) => (
+          <button key={o.id} className="pick" onClick={() => chooseOutlet(o)}>
+            <span><span className="name">{o.name}</span></span>
+            <span className="chev">›</span>
+          </button>
+        ))}
+        <h2 style={{ fontSize: 16, marginTop: 28 }}>Appearance</h2>
+        <p className="lede" style={{ fontSize: 13 }}>
+          Set once for this device. Choose the colour-blind friendly set if
+          red and green are hard to tell apart.
+        </p>
+        <ThemeSwitcher />
+      </Screen>
+    );
+  }
+
+  if (step === 'staff') {
+    return (
+      <Screen title="Who's working?" lede={outlet?.name} onBack={() => setStep('outlet')} backLabel="Change outlet">
+        {staff.map((s) => (
+          <button key={s.id} className="pick"
+            onClick={() => { setPerson(s); setPin(''); setError(null); setStep('pin'); }}>
+            <span>
+              <span className="name">{s.name}</span>
+              <span className="meta">{s.role}{s.needsPin ? ' · set your PIN' : ''}</span>
+            </span>
+            <span className="chev">›</span>
+          </button>
+        ))}
+        {staff.length === 0 && <p className="empty">No staff set up for this outlet yet.</p>}
+        <a className="btn btn-ghost" href="/manager"
+          style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 16 }}>
+          Manager sign in
+        </a>
+      </Screen>
+    );
+  }
+
+  if (step === 'pin') {
+    const first = person?.needsPin;
+    return (
+      <Screen
+        title={first ? 'Create your PIN' : `Hello, ${person?.name.split(' ')[0]}`}
+        lede={first
+          ? 'Choose a 4-digit PIN. You will use it every shift — do not share it.'
+          : 'Enter your 4-digit PIN.'}
+        onBack={() => { setPerson(null); setPin(''); setStep('staff'); }}
+      >
+        <div className="pindots">
+          {[0, 1, 2, 3].map((i) => (
+            <span key={i} className={`pindot${i < pin.length ? ' filled' : ''}`} />
+          ))}
+        </div>
+        {error && <div className="banner error">{error}</div>}
+        <div className="pinpad">
+          {['1','2','3','4','5','6','7','8','9'].map((n) => (
+            <button key={n} disabled={busy} onClick={() => {
+              const next = pin + n;
+              setPin(next);
+              if (next.length === 4) void submitPin(next);
+            }}>{n}</button>
+          ))}
+          <button onClick={() => { setPin(''); setError(null); }}>Clear</button>
+          <button disabled={busy} onClick={() => {
+            const next = pin + '0';
+            setPin(next);
+            if (next.length === 4) void submitPin(next);
+          }}>0</button>
+          <button onClick={() => setPin(pin.slice(0, -1))}>⌫</button>
+        </div>
+      </Screen>
+    );
+  }
+
+  // --- list step (stations) -----------------------------------------------
 
   if (active !== null) {
     const st = stations[active];
@@ -146,8 +409,8 @@ export default function StaffLineCheckPage() {
         {error && <p className="lede" style={{ color: 'var(--locked)' }}>{error}</p>}
 
         <div className="btn-row">
-          <button className="btn-ghost" onClick={() => next(active, q)}>
-            {st.index >= L1_QUESTIONS.length - 1 ? 'Complete station' : 'Next'}
+          <button className="btn-ghost" onClick={() => next(active, q)} disabled={busy}>
+            {busy ? 'Saving...' : st.index >= L1_QUESTIONS.length - 1 ? 'Complete station' : 'Next'}
           </button>
         </div>
 
@@ -158,53 +421,85 @@ export default function StaffLineCheckPage() {
           value={pauseDraft}
           onChange={(e) => setPauseDraft(e.target.value)}
         />
-        <button className="btn-ghost" onClick={() => pauseStation(active)}>
-          Pause and switch station
+        <button className="btn-ghost" onClick={() => pauseStation(active)} disabled={busy}>
+          {busy ? 'Saving...' : 'Pause and switch station'}
         </button>
       </div>
     );
   }
 
   return (
-    <div className="shell">
-      <header className="topbar">
+    <>
+      <div className="topbar">
         <div>
+          <h1>{me?.name}</h1>
+          <div className="sub">{me?.role} · {outlet?.name}</div>
+        </div>
+        <div className="bellrow">
+          <NotificationBell />
+          <button className="btn-ghost" style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }}
+            onClick={signOut}>Done</button>
+        </div>
+      </div>
+
+      <div className="shell">
+        <header style={{ marginBottom: 20 }}>
           <h1>Line check — L1</h1>
           <div className="sub">Sample bank for review · 12:00 hard stop · stations independent</div>
-        </div>
-      </header>
+        </header>
 
-      <p className="lede">
-        One question per page. Pause any station without losing answers. Overall {overall.percent}%
-        {overall.band !== '—' ? ` · ${overall.band}` : ''}.
-      </p>
+        <p className="lede">
+          One question per page. Pause any station without losing answers. Overall {overall.percent}%
+          {overall.band !== '—' ? ` · ${overall.band}` : ''}.
+        </p>
 
-      {STATIONS.map((s) => {
-        const st = stations[s.id];
-        const sc = stationScore(st.answers);
-        const done = Object.keys(st.answers).length;
-        return (
-          <article key={s.id} className={`item ${st.status === 'complete' ? 'done' : ''}`}>
-            <div className="head">
-              <div className="title">{s.name}</div>
-              <span className={`tag ${st.status === 'complete' ? 'ok' : st.status === 'paused' ? 'warn' : 'plain'}`}>
-                {st.status.replace('_', ' ')}
-              </span>
-            </div>
-            <div className="desc">
-              {done}/{L1_QUESTIONS.length} answered
-              {done ? ` · ${sc.percent}% ${sc.band}` : ''}
-            </div>
-            {st.pauseReason && <div className="due">Paused: {st.pauseReason}</div>}
-            <div className="progress">
-              <div style={{ width: `${(done / L1_QUESTIONS.length) * 100}%` }} />
-            </div>
-            <button className="btn-primary" style={{ marginTop: 12 }} onClick={() => openStation(s.id)}>
-              {st.status === 'idle' ? 'Start' : st.status === 'complete' ? 'Review' : 'Resume'}
-            </button>
-          </article>
-        );
-      })}
+        {STATIONS.map((s) => {
+          const st = stations[s.id];
+          const sc = stationScore(st.answers);
+          const done = Object.keys(st.answers).length;
+          return (
+            <article key={s.id} className={`item ${st.status === 'complete' ? 'done' : ''}`}>
+              <div className="head">
+                <div className="title">{s.name}</div>
+                <span className={`tag ${st.status === 'complete' ? 'ok' : st.status === 'paused' ? 'warn' : 'plain'}`}>
+                  {st.status.replace('_', ' ')}
+                </span>
+              </div>
+              <div className="desc">
+                {done}/{L1_QUESTIONS.length} answered
+                {done ? ` · ${sc.percent}% ${sc.band}` : ''}
+              </div>
+              {st.pauseReason && <div className="due">Paused: {st.pauseReason}</div>}
+              <div className="progress">
+                <div style={{ width: `${(done / L1_QUESTIONS.length) * 100}%` }} />
+              </div>
+              <button className="btn-primary" style={{ marginTop: 12 }} onClick={() => openStation(s.id)}>
+                {st.status === 'idle' ? 'Start' : st.status === 'complete' ? 'Review' : 'Resume'}
+              </button>
+            </article>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+// --------------------------------------------------------------------------
+
+function Screen({ title, lede, children, onBack, backLabel }: {
+  title: string; lede?: string; children: React.ReactNode;
+  onBack?: () => void; backLabel?: string;
+}) {
+  return (
+    <div className="shell" style={{ paddingTop: 32 }}>
+      <h2>{title}</h2>
+      {lede && <p className="lede">{lede}</p>}
+      {children}
+      {onBack && (
+        <button className="btn-ghost" style={{ marginTop: 16 }} onClick={onBack}>
+          {backLabel ?? 'Back'}
+        </button>
+      )}
     </div>
   );
 }
