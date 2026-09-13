@@ -32,26 +32,42 @@ export async function GET(request: Request) {
       .select(`
         id,
         name,
-        timezone,
-        line_check_runs (
-          id,
-          run_date,
-          l2_completed_at,
-          l3_completed_at,
-          line_check_stations (
-            station_no,
-            status,
-            pause_reason
-          )
-        )
+        timezone
       `)
       .eq('org_id', profile.org_id)
-      .eq('line_check_runs.run_date', dateStr)
       .order('name');
 
     if (outletsError) throw outletsError;
 
-    return NextResponse.json({ outlets });
+    if (!outlets || outlets.length === 0) {
+      return NextResponse.json({ outlets: [] });
+    }
+
+    const { data: runs, error: runsError } = await supabase
+      .from('line_check_runs')
+      .select(`
+        id,
+        outlet_id,
+        run_date,
+        l2_completed_at,
+        l3_completed_at,
+        line_check_stations (
+          station_no,
+          status,
+          pause_reason
+        )
+      `)
+      .in('outlet_id', outlets.map((o: any) => o.id))
+      .eq('run_date', dateStr);
+
+    if (runsError) throw runsError;
+
+    const outletsWithRuns = outlets.map((outlet: any) => ({
+      ...outlet,
+      line_check_runs: runs?.filter((r: any) => r.outlet_id === outlet.id) || []
+    }));
+
+    return NextResponse.json({ outlets: outletsWithRuns });
   } catch (error: any) {
     console.error('Manager overview error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
