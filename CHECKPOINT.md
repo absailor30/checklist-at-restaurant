@@ -21,15 +21,13 @@ Current product: **L1/L2/L3 Line Check**.
 5. `supabase/migrations/0007_line_check.sql` — questions, runs, stations, answers + seed.
 6. `src/app/staff/page.tsx` — reviewable L1 flow: 3 independent stations, one
    question per page, pause with reason, photo/reason/numeric gates, live %.
-
-Answers live in the browser for this review cut. Wire to 0007 tables next.
+7. **Database sync API** — saving runs, stations, and answers securely with photo uploads.
+8. **Manager Dashboards** — L2 and L3 progressive unlock UI in `/manager`, old department UI archived.
+9. **Cron Miss Logic** — 12:00 deadline logic running in `/api/cron/refresh`, respects local timezones and preserves pause reasons.
 
 ### Not yet
-1. Persist runs/answers to Supabase (staff login already exists).
-2. Apply 0007 on the live project.
-3. L2/L3 views, notifications when all three stations complete.
-4. Miss recording at 12:00 in outlet timezone.
+1. Push notifications when L1 completes, triggering L2/L3 alerts.
 
 ## Review
-Staff line check: `/staff` (home still redirects there).
-Sample only — no auth required on this cut so reviewers can tap through types.
+Staff line check: `/staff`
+Manager line check: `/manager`
