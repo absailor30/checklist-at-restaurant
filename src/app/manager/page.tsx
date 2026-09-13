@@ -63,6 +63,14 @@ export default function ManagerDashboard() {
     };
   }, [supabase]);
 
+  useEffect(() => {
+    if (sessionState !== 'in') return;
+    const interval = setInterval(() => {
+      fetchOverview();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [sessionState]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginBusy(true);
@@ -224,20 +232,53 @@ export default function ManagerDashboard() {
                         const st = run.line_check_stations?.find((s: any) => s.station_no === stNo);
                         let statusText = 'Not Started';
                         let tagClass = 'plain';
+                        let timingText = null;
+                        let timingClass = '';
 
                         if (st) {
                           statusText = st.status.replace('_', ' ');
-                          if (st.status === 'complete') tagClass = 'ok';
-                          if (st.status === 'in_progress') tagClass = 'warn';
-                          if (st.status === 'paused') tagClass = 'locked';
+                          if (st.status === 'complete') {
+                            tagClass = 'ok';
+                            if (st.completed_at) {
+                              const formatter = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: outlet.timezone || 'UTC',
+                                year: 'numeric', month: '2-digit', day: '2-digit',
+                                hour: '2-digit', minute: '2-digit',
+                                hour12: false
+                              });
+                              const parts = formatter.formatToParts(new Date(st.completed_at));
+                              const dp = Object.fromEntries(parts.map(p => [p.type, p.value]));
+                              const completedLocal = `${dp.year}-${dp.month}-${dp.day} ${dp.hour}:${dp.minute}`;
+                              const cutoffLocal = `${run.run_date} 12:00`;
+
+                              if (completedLocal >= cutoffLocal) {
+                                timingText = 'Late';
+                                timingClass = 'warn';
+                              } else {
+                                timingText = 'On Time';
+                                timingClass = 'ok';
+                              }
+                            }
+                          } else if (st.status === 'in_progress') {
+                            tagClass = 'warn';
+                          } else if (st.status === 'paused') {
+                            tagClass = 'locked';
+                          } else if (st.status === 'missed') {
+                            tagClass = 'locked';
+                          }
                         }
 
                         return (
                           <div key={stNo} className="card" style={{ flex: 1, padding: '10px', marginBottom: 0, textAlign: 'center', boxShadow: 'none' }}>
                             <div style={{ fontWeight: 600, fontSize: 14 }}>S{stNo}</div>
-                            <span className={`tag ${tagClass}`} style={{ marginTop: 4, textTransform: 'capitalize' }}>
-                              {statusText}
-                            </span>
+                            <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                              <span className={`tag ${tagClass}`} style={{ textTransform: 'capitalize' }}>
+                                {statusText}
+                              </span>
+                              {timingText && (
+                                <span className={`tag ${timingClass}`}>{timingText}</span>
+                              )}
+                            </div>
                           </div>
                         );
                       })}

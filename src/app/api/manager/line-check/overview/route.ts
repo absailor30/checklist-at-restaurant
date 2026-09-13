@@ -53,7 +53,8 @@ export async function GET(request: Request) {
           line_check_stations (
             station_no,
             status,
-            pause_reason
+            pause_reason,
+            completed_at
           )
         `)
         .in('outlet_id', outlets.map((o: any) => o.id))
