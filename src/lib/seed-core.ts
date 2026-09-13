@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import bcrypt from 'bcryptjs';
-import { SEED_ROLES, SEED_SHIFTS, SEED_TEMPLATES } from '@/lib/checklist-content';
+import { SEED_ROLES, SEED_SHIFTS, SEED_TEMPLATES } from '../../archive/department-checklist/checklist-content';
 
 // The demo builder, shared by the command-line script and the /setup page.
 //

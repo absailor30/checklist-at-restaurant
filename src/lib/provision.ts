@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { SEED_ROLES, SEED_SHIFTS, SEED_TEMPLATES } from '@/lib/checklist-content';
+import { SEED_ROLES, SEED_SHIFTS, SEED_TEMPLATES } from '../../archive/department-checklist/checklist-content';
 
 // Creating a real restaurant group: roles, the reporting chain, outlets, shifts
 // and a starting set of checklists, plus the owner's own account.

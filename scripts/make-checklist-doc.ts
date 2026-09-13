@@ -11,7 +11,7 @@ import {
   AlignmentType, BorderStyle, Document, HeadingLevel, PageBreak, Packer,
   Paragraph, ShadingType, Table, TableCell, TableRow, TextRun, WidthType,
 } from 'docx';
-import { SEED_TEMPLATES, SEED_ROLES } from '../src/lib/checklist-content';
+import { SEED_TEMPLATES, SEED_ROLES } from '../archive/department-checklist/checklist-content';
 
 const ACCENT = 'B4451F';
 const INK = '1D1A17';
