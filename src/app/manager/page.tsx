@@ -1,548 +1,347 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { NotificationBell } from '@/components/notifications';
 
-// The manager screen: what is locked and waiting on them, what needs
-// approving, what came back out of range, and how each outlet is tracking.
-//
-// Ordered by what needs a decision now. A manager opening this during service
-// has seconds, not minutes.
-
-interface LockedItem {
-  lockId: string; runId: string; itemId: string; title: string;
-  proof: string; unit: string | null; minValue: number | null; maxValue: number | null;
-  outlet: string; outletId: string; checklist: string; shift: string; forRole: string;
-  state: 'locked' | 'unlocked'; lockedAt: string; escalationLevel: number;
-  escalatesAt: string | null; unlockExpiresAt: string | null; unlockComment: string | null;
-  empoweredRoles: string[]; youCanUnlock: boolean; dueAt: string | null;
-}
-
-interface ReviewItem {
-  id: string; title: string; unit: string | null;
-  minValue: number | null; maxValue: number | null;
-  outlet: string; checklist: string; by: string;
-  valueNumber: number | null; valueText: string | null;
-  photoPath: string | null; comment: string | null;
-  status: string; outOfBounds: boolean; wasLate: boolean; submittedAt: string;
-  replaced?: boolean;
-}
-
-interface OutletStat {
-  id: string; name: string; total: number; done: number; locked: number; percent: number;
-}
-
-interface Overview {
-  date: string;
-  manager: { name: string; role: string; canReview: boolean; canUnlock: boolean };
-  defaultUnlockWindow: number;
-  locked: LockedItem[];
-  review: ReviewItem[];
-  alerts: ReviewItem[];
-  outlets: OutletStat[];
-}
-
-type Tab = 'locked' | 'review' | 'alerts' | 'outlets';
-
-export default function ManagerPage() {
-  const [session, setSession] = useState<'loading' | 'out' | 'in'>('loading');
-  const [data, setData] = useState<Overview | null>(null);
-  const [tab, setTab] = useState<Tab>('locked');
-  const [error, setError] = useState<string | null>(null);
-  const [acting, setActing] = useState<LockedItem | null>(null);
-  const [reviewing, setReviewing] = useState<ReviewItem | null>(null);
-
+export default function ManagerDashboard() {
+  const router = useRouter();
   const supabase = createClient();
+  const [sessionState, setSessionState] = useState<'checking' | 'in' | 'out'>('checking');
 
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/manager/overview?t=${Date.now()}`, { cache: 'no-store' });
-    if (res.status === 401) { setSession('out'); return; }
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(body.error ?? `Could not load the dashboard (error ${res.status}).`);
-      return;
-    }
-    setData(body);
-    setSession('in');
-  }, []);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      if (!s) { setSession('out'); return; }
-      void load();
-    });
-  }, [load, supabase]);
-
-  // Locks escalate on a clock, so keep the screen honest without a manual
-  // refresh.
-  useEffect(() => {
-    if (session !== 'in') return;
-    // 15 seconds rather than a minute: a manager watching for a submission
-    // should not wait up to a minute to see it arrive.
-    const t = setInterval(() => { void load(); }, 15_000);
-    const onVisible = () => { if (!document.hidden) void load(); };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      clearInterval(t);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [session, load]);
-
-  if (session === 'loading') return <div className="spinner" />;
-  if (session === 'out') return <SignIn onDone={load} />;
-  if (!data) return <div className="spinner" />;
-
-  const urgent = data.locked.filter((l) => l.youCanUnlock && l.state === 'locked').length;
-
-  return (
-    <>
-      <div className="topbar">
-        <div>
-          <h1>{data.manager.name}</h1>
-          <div className="sub">{data.manager.role} · {data.date}</div>
-        </div>
-        <div className="bellrow">
-          <NotificationBell />
-          <button className="btn-ghost" style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }}
-            onClick={async () => { await supabase.auth.signOut(); setSession('out'); }}>
-            Sign out
-          </button>
-        </div>
-      </div>
-
-      <div className="shell">
-        {error && <div className="banner error">{error}</div>}
-
-        <div className="tabs">
-          <Tab id="locked"  label="Locked"   count={data.locked.length} badge={urgent} tab={tab} set={setTab} />
-          <Tab id="review"  label="Approve"  count={data.review.length} tab={tab} set={setTab} />
-          <Tab id="alerts"  label="Alerts"   count={data.alerts.length} tab={tab} set={setTab} />
-          <Tab id="outlets" label="Outlets"  count={data.outlets.length} tab={tab} set={setTab} />
-        </div>
-
-        {tab === 'locked' && (
-          <>
-            {data.locked.length === 0 && (
-              <p className="empty">Nothing locked. Everything is on track.</p>
-            )}
-            {data.locked.map((l) => (
-              <LockedCard key={l.lockId} item={l} onAct={() => setActing(l)} />
-            ))}
-          </>
-        )}
-
-        {tab === 'review' && (
-          <>
-            {data.review.length === 0 && <p className="empty">Nothing waiting for approval.</p>}
-            {data.review.map((s) => (
-              <SubmissionCard key={s.id} item={s} onOpen={() => setReviewing(s)} />
-            ))}
-          </>
-        )}
-
-        {tab === 'alerts' && (
-          <>
-            {data.alerts.length === 0 && (
-              <p className="empty">No out-of-range readings today.</p>
-            )}
-            {data.alerts.map((s) => (
-              <SubmissionCard key={s.id} item={s} onOpen={() => setReviewing(s)} />
-            ))}
-          </>
-        )}
-
-        {tab === 'outlets' && data.outlets.map((o) => (
-          <div className="card" key={o.id}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-              <strong>{o.name}</strong>
-              <span style={{ color: o.locked ? 'var(--locked)' : 'var(--muted)' }}>
-                {o.percent}%{o.locked ? ` · ${o.locked} locked` : ''}
-              </span>
-            </div>
-            <div className="progress"><div style={{ width: `${o.percent}%` }} /></div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}>
-              {o.done} of {o.total} tasks done today
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {acting && (
-        <ActionSheet
-          item={acting}
-          defaultWindow={data.defaultUnlockWindow}
-          onClose={() => setActing(null)}
-          onDone={async () => { setActing(null); await load(); }}
-        />
-      )}
-
-      {reviewing && (
-        <ReviewSheet
-          item={reviewing}
-          canReview={data.manager.canReview}
-          onClose={() => setReviewing(null)}
-          onDone={async () => { setReviewing(null); await load(); }}
-        />
-      )}
-    </>
-  );
-}
-
-// --------------------------------------------------------------------------
-
-function Tab({ id, label, count, badge, tab, set }: {
-  id: Tab; label: string; count: number; badge?: number; tab: Tab; set: (t: Tab) => void;
-}) {
-  return (
-    <button className={`tab${tab === id ? ' active' : ''}`} onClick={() => set(id)}>
-      {label}
-      {count > 0 && <span className={`tabcount${badge ? ' urgent' : ''}`}>{count}</span>}
-    </button>
-  );
-}
-
-function SignIn({ onDone }: { onDone: () => void }) {
+  // Login state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const supabase = createClient();
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
-  async function submit(e: React.FormEvent) {
+  const [outlets, setOutlets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  // Review modal state
+  const [reviewLevel, setReviewLevel] = useState<'L2' | 'L3' | null>(null);
+  const [reviewRunId, setReviewRunId] = useState<string | null>(null);
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+
+  const fetchOverview = async () => {
+    try {
+      const res = await fetch('/api/manager/line-check/overview');
+      if (!res.ok) throw new Error('Failed to fetch overview');
+      const data = await res.json();
+      setOutlets(data.outlets || []);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        setSessionState('out');
+      } else {
+        setSessionState('in');
+        fetchOverview();
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setSessionState('in');
+        fetchOverview();
+      } else {
+        setSessionState('out');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setBusy(true); setError(null);
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    setBusy(false);
-    if (signInError) { setError(signInError.message); return; }
-    onDone();
+    setLoginBusy(true);
+    setLoginError('');
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoginBusy(false);
+    if (error) setLoginError(error.message);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const startReview = async (runId: string, level: 'L2' | 'L3') => {
+    setReviewLevel(level);
+    setReviewRunId(runId);
+    setAnswers({});
+    try {
+      const res = await fetch(`/api/manager/line-check/questions?level=${level}`);
+      if (!res.ok) throw new Error('Failed to fetch questions');
+      const data = await res.json();
+      setQuestions(data.questions || []);
+    } catch (err: any) {
+      alert(err.message);
+      setReviewLevel(null);
+    }
+  };
+
+  const submitReview = async () => {
+    if (!reviewLevel || !reviewRunId) return;
+
+    if (Object.keys(answers).length < questions.length) {
+      alert('Please answer all questions');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const formattedAnswers = Object.entries(answers).map(([qId, val]) => ({
+        question_id: qId,
+        yes_no: val,
+      }));
+
+      const res = await fetch('/api/manager/line-check/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ run_id: reviewRunId, level: reviewLevel, answers: formattedAnswers }),
+      });
+
+      if (!res.ok) throw new Error('Failed to submit review');
+
+      setReviewLevel(null);
+      setReviewRunId(null);
+      fetchOverview();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (sessionState === 'checking') return <div className="p-8">Loading...</div>;
+
+  if (sessionState === 'out') {
+    return (
+      <div className="p-4 md:p-8 max-w-md mx-auto mt-12">
+        <h2 className="text-2xl font-bold mb-4">Manager sign in</h2>
+        <p className="text-gray-600 mb-6">
+          Managers sign in with an email and password, not a PIN — approvals and
+          unlocks are recorded against your name permanently.
+        </p>
+        {loginError && <div className="bg-red-100 text-red-700 p-3 rounded mb-4">{loginError}</div>}
+        <form className="bg-white border rounded p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700" onSubmit={handleLogin}>
+          <div className="mb-4">
+            <label className="block font-medium mb-1">Email</label>
+            <input
+              type="email"
+              value={email}
+              autoComplete="username"
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full border p-2 rounded dark:bg-gray-700 dark:border-gray-600"
+            />
+          </div>
+          <div className="mb-6">
+            <label className="block font-medium mb-1">Password</label>
+            <input
+              type="password"
+              value={password}
+              autoComplete="current-password"
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full border p-2 rounded dark:bg-gray-700 dark:border-gray-600"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loginBusy}
+            className="w-full bg-blue-600 text-white p-2 rounded font-medium hover:bg-blue-700 disabled:opacity-50"
+          >
+            {loginBusy ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+        <div className="mt-4 text-center">
+          <a className="text-blue-600 hover:underline" href="/staff">
+            I&apos;m floor staff
+          </a>
+        </div>
+      </div>
+    );
   }
 
-  return (
-    <div className="shell" style={{ paddingTop: 48 }}>
-      <h2>Manager sign in</h2>
-      <p className="lede">
-        Managers sign in with an email and password, not a PIN — approvals and
-        unlocks are recorded against your name permanently.
-      </p>
-      {error && <div className="banner error">{error}</div>}
-      <form className="card" onSubmit={submit}>
-        <label>Email</label>
-        <input type="email" value={email} autoComplete="username"
-          onChange={(e) => setEmail(e.target.value)} required />
-        <label>Password</label>
-        <input type="password" value={password} autoComplete="current-password"
-          onChange={(e) => setPassword(e.target.value)} required
-          style={{ WebkitTextSecurity: 'disc' } as React.CSSProperties} />
-        <button className="btn-primary" style={{ marginTop: 18 }} disabled={busy}>
-          {busy ? 'Signing in…' : 'Sign in'}
-        </button>
-      </form>
-      <a className="btn btn-ghost" href="/staff"
-        style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
-        I&apos;m floor staff
-      </a>
-    </div>
-  );
-}
+  if (loading) return <div className="p-8">Loading Manager Dashboard...</div>;
+  if (error) return <div className="p-8 text-red-500">Error: {error}</div>;
 
-function LockedCard({ item, onAct }: { item: LockedItem; onAct: () => void }) {
-  const unlocked = item.state === 'unlocked';
   return (
-    <div className={`item ${unlocked ? 'unlocked' : 'locked'}`}>
-      <div className="head">
-        <div className="title">
-          {item.title}
-          <div className="desc">
-            {item.outlet} · {item.checklist} · {item.forRole}
-          </div>
-        </div>
-        {item.escalationLevel > 0 && !unlocked && (
-          <span className="tag locked">Escalated ×{item.escalationLevel}</span>
-        )}
+    <div className="p-4 md:p-8 max-w-4xl mx-auto">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Line Check - Manager Dashboard</h1>
+        <button onClick={handleLogout} className="text-sm border px-3 py-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700">
+          Sign out
+        </button>
       </div>
 
-      <div className="lockbox">
-        {unlocked ? (
-          <div className="row">
-            <span className="label">Reopened until</span>
-            <span><strong>{relative(item.unlockExpiresAt!)}</strong></span>
-          </div>
-        ) : (
-          <>
-            <div className="row">
-              <span className="label">Locked</span>
-              <span>{relative(item.lockedAt)}</span>
-            </div>
-            <div className="row">
-              <span className="label">Can unlock</span>
-              <span>{item.empoweredRoles.join(', ')}</span>
-            </div>
-            {item.escalatesAt && (
-              <div className="row">
-                <span className="label">Escalates</span>
-                <span>{relative(item.escalatesAt)}</span>
+      {outlets.length === 0 && <p className="text-gray-500">No outlets found.</p>}
+
+      {outlets.map(outlet => {
+        const runs = outlet.line_check_runs || [];
+        const run = runs.length > 0 ? runs[0] : null; // assuming today's run
+
+        let stationsComplete = 0;
+        let l1Complete = false;
+        if (run && run.line_check_stations) {
+          const completes = run.line_check_stations.filter((s: any) => s.status === 'complete');
+          stationsComplete = completes.length;
+          l1Complete = stationsComplete === 3;
+        }
+
+        const l2Complete = !!(run && run.l2_completed_at);
+        const l3Complete = !!(run && run.l3_completed_at);
+
+        return (
+          <div key={outlet.id} className="border rounded p-4 mb-4 bg-white shadow-sm dark:bg-gray-800 dark:border-gray-700">
+            <h2 className="text-xl font-semibold mb-4">{outlet.name}</h2>
+
+            {!run ? (
+              <p className="text-gray-500">No line check started today.</p>
+            ) : (
+              <div>
+                <div className="mb-4">
+                  <h3 className="font-medium text-sm text-gray-500 uppercase tracking-wider mb-2">L1 Stations</h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[1, 2, 3].map(stNo => {
+                      const st = run.line_check_stations?.find((s: any) => s.station_no === stNo);
+                      let statusText = 'Not Started';
+                      let color = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+
+                      if (st) {
+                        statusText = st.status;
+                        if (st.status === 'complete') color = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+                        if (st.status === 'in_progress') color = 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+                        if (st.status === 'paused') color = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+                      }
+
+                      return (
+                        <div key={stNo} className={`p-2 rounded text-center text-sm font-medium ${color}`}>
+                          <div>Station {stNo}</div>
+                          <div className="text-xs opacity-80 mt-1 capitalize">{statusText}</div>
+                          {st?.status === 'paused' && st.pause_reason && (
+                            <div className="text-xs mt-1 italic">Reason: {st.pause_reason}</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-4 border-t pt-4 border-gray-200 dark:border-gray-700">
+                  <div className="flex-1">
+                    <h3 className="font-medium mb-2">L2 Review (Manager)</h3>
+                    {l2Complete ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                        Completed
+                      </span>
+                    ) : l1Complete ? (
+                      <button
+                        onClick={() => startReview(run.id, 'L2')}
+                        className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 transition-colors"
+                      >
+                        Complete L2 Review
+                      </button>
+                    ) : (
+                      <span className="text-sm text-gray-500">Waiting for L1 completion (Stations 1-3)</span>
+                    )}
+                  </div>
+
+                  <div className="flex-1">
+                    <h3 className="font-medium mb-2">L3 Review (Area Manager)</h3>
+                    {l3Complete ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                        Completed
+                      </span>
+                    ) : l2Complete ? (
+                      <button
+                        onClick={() => startReview(run.id, 'L3')}
+                        className="bg-purple-600 text-white px-4 py-2 rounded text-sm hover:bg-purple-700 transition-colors"
+                      >
+                        Complete L3 Review
+                      </button>
+                    ) : (
+                      <span className="text-sm text-gray-500">Waiting for L2 completion</span>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
-          </>
-        )}
-      </div>
+          </div>
+        );
+      })}
 
-      {item.youCanUnlock ? (
-        <button className="btn-primary" style={{ marginTop: 12 }} onClick={onAct}>
-          {unlocked ? 'Resolve it yourself' : 'Unlock or resolve'}
-        </button>
-      ) : (
-        <div className="banner info" style={{ marginTop: 12, marginBottom: 0 }}>
-          Waiting on {item.empoweredRoles.join(' or ')}. It reaches you when it escalates.
+      {reviewLevel && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto p-6">
+            <h2 className="text-2xl font-bold mb-4">{reviewLevel} Review</h2>
+
+            {questions.length === 0 ? (
+              <p>Loading questions...</p>
+            ) : (
+              <div className="space-y-6">
+                {questions.map((q, idx) => (
+                  <div key={q.id} className="border-b pb-4 dark:border-gray-700">
+                    <p className="font-medium mb-3">{idx + 1}. {q.prompt}</p>
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name={q.id}
+                          value="yes"
+                          checked={answers[q.id] === 'yes'}
+                          onChange={() => setAnswers(prev => ({ ...prev, [q.id]: 'yes' }))}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span>Yes</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name={q.id}
+                          value="no"
+                          checked={answers[q.id] === 'no'}
+                          onChange={() => setAnswers(prev => ({ ...prev, [q.id]: 'no' }))}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span>No</span>
+                      </label>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="flex justify-end gap-3 pt-4">
+                  <button
+                    onClick={() => setReviewLevel(null)}
+                    className="px-4 py-2 border rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={submitReview}
+                    disabled={submitting}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {submitting ? 'Submitting...' : 'Submit Review'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
   );
-}
-
-function SubmissionCard({ item, onOpen }: { item: ReviewItem; onOpen: () => void }) {
-  return (
-    <div className={`item ${item.outOfBounds ? 'locked' : ''}`}>
-      <div className="head">
-        <div className="title">
-          {item.title}
-          <div className="desc">{item.outlet} · by {item.by}</div>
-          {item.valueNumber !== null && (
-            <div className="due" style={item.outOfBounds
-              ? { color: 'var(--locked)', fontWeight: 700 } : undefined}>
-              {item.valueNumber}{item.unit ?? ''}
-              {item.outOfBounds &&
-                ` — outside ${item.minValue} to ${item.maxValue}${item.unit ?? ''}`}
-            </div>
-          )}
-          {item.valueText && <div className="due">{item.valueText}</div>}
-          {item.comment && <div className="due">“{item.comment}”</div>}
-        </div>
-        <span className={`tag ${statusTone(item)}`}>{statusLabel(item)}</span>
-      </div>
-      <button className="btn-ghost" style={{ marginTop: 12 }} onClick={onOpen}>
-        {item.status === 'submitted' ? 'Review' : 'View'}
-      </button>
-    </div>
-  );
-}
-
-function ActionSheet({ item, defaultWindow, onClose, onDone }: {
-  item: LockedItem; defaultWindow: number; onClose: () => void; onDone: () => void;
-}) {
-  const [mode, setMode] = useState<'unlock' | 'complete' | 'waive'>(
-    item.state === 'unlocked' ? 'complete' : 'unlock'
-  );
-  const [comment, setComment] = useState('');
-  const [value, setValue] = useState('');
-  const [minutes, setMinutes] = useState(String(defaultWindow));
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function go() {
-    setBusy(true); setError(null);
-    try {
-      const url = mode === 'unlock' ? '/api/manager/unlock' : '/api/manager/resolve';
-      const body = mode === 'unlock'
-        ? { lockId: item.lockId, comment, windowMinutes: Number(minutes) }
-        : { lockId: item.lockId, action: mode, comment, value };
-
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error); return; }
-      onDone();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <h3>{item.title}</h3>
-        <p className="lede">{item.outlet} · {item.checklist}</p>
-        {error && <div className="banner error">{error}</div>}
-
-        <div className="segmented">
-          {item.state !== 'unlocked' && (
-            <button className={mode === 'unlock' ? 'on' : ''} onClick={() => setMode('unlock')}>
-              Let staff do it
-            </button>
-          )}
-          <button className={mode === 'complete' ? 'on' : ''} onClick={() => setMode('complete')}>
-            I did it
-          </button>
-          <button className={mode === 'waive' ? 'on' : ''} onClick={() => setMode('waive')}>
-            Not needed
-          </button>
-        </div>
-
-        <p className="lede" style={{ fontSize: 13, marginTop: 12 }}>
-          {mode === 'unlock' &&
-            'Reopens the task for staff for a limited time. It locks again if they do not finish.'}
-          {mode === 'complete' &&
-            'Records that you completed it yourself. Kept separate from staff completions in reports.'}
-          {mode === 'waive' &&
-            'Records that the task did not apply today. Never counted as completed, and shown to the owner.'}
-        </p>
-
-        {mode === 'unlock' && (
-          <>
-            <label>Reopen for</label>
-            <select value={minutes} onChange={(e) => setMinutes(e.target.value)}>
-              <option value="15">15 minutes</option>
-              <option value="30">30 minutes</option>
-              <option value="60">1 hour</option>
-              <option value="120">2 hours</option>
-            </select>
-          </>
-        )}
-
-        {mode === 'complete' && item.proof === 'number' && (
-          <>
-            <label>
-              Reading{item.unit ? ` (${item.unit})` : ''}
-              {item.minValue !== null && ` — expected ${item.minValue} to ${item.maxValue}`}
-            </label>
-            <input type="number" inputMode="decimal" value={value}
-              onChange={(e) => setValue(e.target.value)} />
-          </>
-        )}
-
-        <label>Reason (recorded permanently)</label>
-        <textarea value={comment} onChange={(e) => setComment(e.target.value)}
-          placeholder={
-            mode === 'waive'
-              ? 'e.g. Delivery did not arrive, so nothing to check in'
-              : 'e.g. Rush during service, staff were reassigned'
-          } />
-
-        <div className="btn-row" style={{ marginTop: 18 }}>
-          <button className="btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
-          <button className="btn-primary" onClick={go} disabled={busy || comment.trim().length < 5}>
-            {busy ? 'Saving…' : 'Confirm'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ReviewSheet({ item, canReview, onClose, onDone }: {
-  item: ReviewItem; canReview: boolean; onClose: () => void; onDone: () => void;
-}) {
-  const [note, setNote] = useState('');
-  const [photo, setPhoto] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!item.photoPath) return;
-    fetch(`/api/manager/photo?path=${encodeURIComponent(item.photoPath)}`)
-      .then((r) => r.json())
-      .then((d) => setPhoto(d.url ?? null))
-      .catch(() => setPhoto(null));
-  }, [item.photoPath]);
-
-  async function decide(decision: 'approved' | 'rejected') {
-    setBusy(true); setError(null);
-    try {
-      const res = await fetch('/api/manager/review', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ submissionId: item.id, decision, note }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error); return; }
-      onDone();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <h3>{item.title}</h3>
-        <p className="lede">{item.outlet} · by {item.by} · {time(item.submittedAt)}</p>
-        {error && <div className="banner error">{error}</div>}
-
-        {item.outOfBounds && (
-          <div className="banner error">
-            Reading {item.valueNumber}{item.unit ?? ''} is outside the expected
-            range of {item.minValue} to {item.maxValue}{item.unit ?? ''}.
-          </div>
-        )}
-
-        {item.valueNumber !== null && !item.outOfBounds && (
-          <div className="banner info">Reading: {item.valueNumber}{item.unit ?? ''}</div>
-        )}
-        {item.valueText && <div className="banner info">{item.valueText}</div>}
-        {item.comment && <div className="banner info">“{item.comment}”</div>}
-        {item.wasLate && <div className="banner info">Submitted after the due time.</div>}
-
-        {item.photoPath
-          ? (photo
-              ? <img className="preview" src={photo} alt="Submitted proof" />
-              : <div className="spinner" />)
-          : <div className="banner info">No photo on this submission.</div>}
-
-        {canReview && item.status === 'submitted' ? (
-          <>
-            <label>Note (required if sending back)</label>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)}
-              placeholder="What needs fixing?" />
-            <div className="btn-row" style={{ marginTop: 18 }}>
-              <button className="btn-ghost" onClick={() => decide('rejected')}
-                disabled={busy || note.trim().length < 5}>
-                Send back
-              </button>
-              <button className="btn-primary" onClick={() => decide('approved')} disabled={busy}>
-                Approve
-              </button>
-            </div>
-          </>
-        ) : (
-          <button className="btn-ghost" style={{ marginTop: 18 }} onClick={onClose}>Close</button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// --------------------------------------------------------------------------
-
-function statusLabel(s: ReviewItem): string {
-  // A replaced reading still shows, so re-taking one cannot quietly clear the
-  // alert; it just says what happened next.
-  if (s.outOfBounds && s.replaced) return 'Out of range · re-checked';
-  if (s.outOfBounds) return 'Out of range';
-  if (s.status === 'approved') return 'Approved';
-  if (s.status === 'rejected') return 'Sent back';
-  if (s.status === 'completed_by_manager') return 'By manager';
-  if (s.status === 'waived') return 'Waived';
-  return 'Awaiting review';
-}
-
-function statusTone(s: ReviewItem): string {
-  if (s.outOfBounds || s.status === 'rejected') return 'locked';
-  if (s.status === 'approved') return 'ok';
-  return 'warn';
-}
-
-function time(iso: string): string {
-  return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })
-    .format(new Date(iso));
-}
-
-function relative(iso: string): string {
-  const diff = new Date(iso).getTime() - Date.now();
-  const mins = Math.round(Math.abs(diff) / 60_000);
-  const text = mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
-  return diff >= 0 ? `in ${text}` : `${text} ago`;
 }
