@@ -124,217 +124,206 @@ export default function ManagerDashboard() {
     }
   };
 
-  if (sessionState === 'checking') return <div className="p-8">Loading...</div>;
+  if (sessionState === 'checking') return <div className="shell" style={{ paddingTop: 32 }}><div className="spinner" /></div>;
 
   if (sessionState === 'out') {
     return (
-      <div className="p-4 md:p-8 max-w-md mx-auto mt-12">
-        <h2 className="text-2xl font-bold mb-4">Manager sign in</h2>
-        <p className="text-gray-600 mb-6">
+      <div className="shell" style={{ paddingTop: 32 }}>
+        <h2>Manager sign in</h2>
+        <p className="lede">
           Managers sign in with an email and password, not a PIN — approvals and
           unlocks are recorded against your name permanently.
         </p>
-        {loginError && <div className="bg-red-100 text-red-700 p-3 rounded mb-4">{loginError}</div>}
-        <form className="bg-white border rounded p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700" onSubmit={handleLogin}>
-          <div className="mb-4">
-            <label className="block font-medium mb-1">Email</label>
+        {loginError && <div className="banner error">{loginError}</div>}
+        <form className="card" onSubmit={handleLogin}>
+          <div>
+            <label htmlFor="email" style={{ marginTop: 0 }}>Email</label>
             <input
+              id="email"
               type="email"
               value={email}
               autoComplete="username"
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full border p-2 rounded dark:bg-gray-700 dark:border-gray-600"
             />
           </div>
-          <div className="mb-6">
-            <label className="block font-medium mb-1">Password</label>
+          <div>
+            <label htmlFor="password">Password</label>
             <input
+              id="password"
               type="password"
               value={password}
               autoComplete="current-password"
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full border p-2 rounded dark:bg-gray-700 dark:border-gray-600"
             />
           </div>
           <button
             type="submit"
             disabled={loginBusy}
-            className="w-full bg-blue-600 text-white p-2 rounded font-medium hover:bg-blue-700 disabled:opacity-50"
+            className="btn-primary"
+            style={{ marginTop: 16 }}
           >
             {loginBusy ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
-        <div className="mt-4 text-center">
-          <a className="text-blue-600 hover:underline" href="/staff">
-            I&apos;m floor staff
-          </a>
-        </div>
+        <a className="btn btn-ghost" href="/staff" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 16, lineHeight: '22px' }}>
+          I'm floor staff
+        </a>
       </div>
     );
   }
 
-  if (loading) return <div className="p-8">Loading Manager Dashboard...</div>;
-  if (error) return <div className="p-8 text-red-500">Error: {error}</div>;
+  if (loading) return <div className="shell" style={{ paddingTop: 32 }}><div className="spinner" /></div>;
+  if (error) return <div className="shell" style={{ paddingTop: 32 }}><div className="banner error">Error: {error}</div></div>;
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Line Check - Manager Dashboard</h1>
-        <button onClick={handleLogout} className="text-sm border px-3 py-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700">
+    <>
+      <div className="topbar">
+        <div>
+          <h1>Manager Dashboard</h1>
+          <div className="sub">Line Check Reviews</div>
+        </div>
+        <button className="btn-ghost" style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }} onClick={handleLogout}>
           Sign out
         </button>
       </div>
 
-      {outlets.length === 0 && <p className="text-gray-500">No outlets found.</p>}
+      <div className="shell">
+        {outlets.length === 0 && <p className="empty">No outlets found.</p>}
 
-      {outlets.map(outlet => {
-        const runs = outlet.line_check_runs || [];
-        const run = runs.length > 0 ? runs[0] : null; // assuming today's run
+        {outlets.map(outlet => {
+          const runs = outlet.line_check_runs || [];
+          const run = runs.length > 0 ? runs[0] : null; // assuming today's run
 
-        let stationsComplete = 0;
-        let l1Complete = false;
-        if (run && run.line_check_stations) {
-          const completes = run.line_check_stations.filter((s: any) => s.status === 'complete');
-          stationsComplete = completes.length;
-          l1Complete = stationsComplete === 3;
-        }
+          let stationsComplete = 0;
+          let l1Complete = false;
+          if (run && run.line_check_stations) {
+            const completes = run.line_check_stations.filter((s: any) => s.status === 'complete');
+            stationsComplete = completes.length;
+            l1Complete = stationsComplete === 3;
+          }
 
-        const l2Complete = !!(run && run.l2_completed_at);
-        const l3Complete = !!(run && run.l3_completed_at);
+          const l2Complete = !!(run && run.l2_completed_at);
+          const l3Complete = !!(run && run.l3_completed_at);
 
-        return (
-          <div key={outlet.id} className="border rounded p-4 mb-4 bg-white shadow-sm dark:bg-gray-800 dark:border-gray-700">
-            <h2 className="text-xl font-semibold mb-4">{outlet.name}</h2>
-
-            {!run ? (
-              <p className="text-gray-500">No line check started today.</p>
-            ) : (
-              <div>
-                <div className="mb-4">
-                  <h3 className="font-medium text-sm text-gray-500 uppercase tracking-wider mb-2">L1 Stations</h3>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[1, 2, 3].map(stNo => {
-                      const st = run.line_check_stations?.find((s: any) => s.station_no === stNo);
-                      let statusText = 'Not Started';
-                      let color = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-
-                      if (st) {
-                        statusText = st.status;
-                        if (st.status === 'complete') color = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-                        if (st.status === 'in_progress') color = 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-                        if (st.status === 'paused') color = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
-                      }
-
-                      return (
-                        <div key={stNo} className={`p-2 rounded text-center text-sm font-medium ${color}`}>
-                          <div>Station {stNo}</div>
-                          <div className="text-xs opacity-80 mt-1 capitalize">{statusText}</div>
-                          {st?.status === 'paused' && st.pause_reason && (
-                            <div className="text-xs mt-1 italic">Reason: {st.pause_reason}</div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-4 border-t pt-4 border-gray-200 dark:border-gray-700">
-                  <div className="flex-1">
-                    <h3 className="font-medium mb-2">L2 Review (Manager)</h3>
-                    {l2Complete ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-                        Completed
-                      </span>
-                    ) : l1Complete ? (
-                      <button
-                        onClick={() => startReview(run.id, 'L2')}
-                        className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 transition-colors"
-                      >
-                        Complete L2 Review
-                      </button>
-                    ) : (
-                      <span className="text-sm text-gray-500">Waiting for L1 completion (Stations 1-3)</span>
-                    )}
-                  </div>
-
-                  <div className="flex-1">
-                    <h3 className="font-medium mb-2">L3 Review (Area Manager)</h3>
-                    {l3Complete ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-                        Completed
-                      </span>
-                    ) : l2Complete ? (
-                      <button
-                        onClick={() => startReview(run.id, 'L3')}
-                        className="bg-purple-600 text-white px-4 py-2 rounded text-sm hover:bg-purple-700 transition-colors"
-                      >
-                        Complete L3 Review
-                      </button>
-                    ) : (
-                      <span className="text-sm text-gray-500">Waiting for L2 completion</span>
-                    )}
-                  </div>
-                </div>
+          return (
+            <article key={outlet.id} className="item">
+              <div className="head">
+                <div className="title">{outlet.name}</div>
               </div>
-            )}
-          </div>
-        );
-      })}
+
+              {!run ? (
+                <div className="desc">No line check started today.</div>
+              ) : (
+                <>
+                  <div style={{ marginTop: 12 }}>
+                    <div className="desc" style={{ marginBottom: 6 }}>L1 Stations</div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {[1, 2, 3].map(stNo => {
+                        const st = run.line_check_stations?.find((s: any) => s.station_no === stNo);
+                        let statusText = 'Not Started';
+                        let tagClass = 'plain';
+
+                        if (st) {
+                          statusText = st.status.replace('_', ' ');
+                          if (st.status === 'complete') tagClass = 'ok';
+                          if (st.status === 'in_progress') tagClass = 'warn';
+                          if (st.status === 'paused') tagClass = 'locked';
+                        }
+
+                        return (
+                          <div key={stNo} className="card" style={{ flex: 1, padding: '10px', marginBottom: 0, textAlign: 'center', boxShadow: 'none' }}>
+                            <div style={{ fontWeight: 600, fontSize: 14 }}>S{stNo}</div>
+                            <span className={`tag ${tagClass}`} style={{ marginTop: 4, textTransform: 'capitalize' }}>
+                              {statusText}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="lockbox">
+                    <div className="row">
+                      <div className="label" style={{ margin: 0, display: 'flex', alignItems: 'center' }}>L2 Review (Manager)</div>
+                      <div>
+                        {l2Complete ? (
+                          <span className="tag ok">Completed</span>
+                        ) : l1Complete ? (
+                          <button
+                            onClick={() => startReview(run.id, 'L2')}
+                            className="btn-primary"
+                            style={{ padding: '6px 12px', minHeight: 'auto', borderRadius: '8px', fontSize: 13, width: 'auto' }}
+                          >
+                            Review
+                          </button>
+                        ) : (
+                          <span className="tag plain">Waiting for L1</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="row" style={{ marginTop: 8 }}>
+                      <div className="label" style={{ margin: 0, display: 'flex', alignItems: 'center' }}>L3 Review (Area)</div>
+                      <div>
+                        {l3Complete ? (
+                          <span className="tag ok">Completed</span>
+                        ) : l2Complete ? (
+                          <button
+                            onClick={() => startReview(run.id, 'L3')}
+                            className="btn-primary"
+                            style={{ padding: '6px 12px', minHeight: 'auto', borderRadius: '8px', fontSize: 13, width: 'auto' }}
+                          >
+                            Review
+                          </button>
+                        ) : (
+                          <span className="tag plain">Waiting for L2</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </article>
+          );
+        })}
+      </div>
 
       {reviewLevel && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto p-6">
-            <h2 className="text-2xl font-bold mb-4">{reviewLevel} Review</h2>
-
+        <div className="sheet-backdrop">
+          <div className="sheet">
+            <h3>{reviewLevel} Review</h3>
             {questions.length === 0 ? (
-              <p>Loading questions...</p>
+              <div className="spinner" />
             ) : (
-              <div className="space-y-6">
+              <div style={{ marginTop: 16 }}>
                 {questions.map((q, idx) => (
-                  <div key={q.id} className="border-b pb-4 dark:border-gray-700">
-                    <p className="font-medium mb-3">{idx + 1}. {q.prompt}</p>
-                    <div className="flex gap-4">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name={q.id}
-                          value="yes"
-                          checked={answers[q.id] === 'yes'}
-                          onChange={() => setAnswers(prev => ({ ...prev, [q.id]: 'yes' }))}
-                          className="w-4 h-4 text-blue-600"
-                        />
-                        <span>Yes</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name={q.id}
-                          value="no"
-                          checked={answers[q.id] === 'no'}
-                          onChange={() => setAnswers(prev => ({ ...prev, [q.id]: 'no' }))}
-                          className="w-4 h-4 text-blue-600"
-                        />
-                        <span>No</span>
-                      </label>
+                  <div key={q.id} className="card">
+                    <div className="tag plain">Q{idx + 1}</div>
+                    <h2 style={{ marginTop: 10, fontSize: 16 }}>{q.prompt}</h2>
+                    <div className="btn-row" style={{ marginTop: 12 }}>
+                      <button
+                        className={answers[q.id] === 'yes' ? 'btn-primary' : 'btn-ghost'}
+                        onClick={() => setAnswers(prev => ({ ...prev, [q.id]: 'yes' }))}
+                      >
+                        Yes
+                      </button>
+                      <button
+                        className={answers[q.id] === 'no' ? 'btn-primary' : 'btn-ghost'}
+                        onClick={() => setAnswers(prev => ({ ...prev, [q.id]: 'no' }))}
+                      >
+                        No
+                      </button>
                     </div>
                   </div>
                 ))}
 
-                <div className="flex justify-end gap-3 pt-4">
-                  <button
-                    onClick={() => setReviewLevel(null)}
-                    className="px-4 py-2 border rounded hover:bg-gray-50 dark:hover:bg-gray-700"
-                  >
+                <div className="btn-row" style={{ marginTop: 20 }}>
+                  <button onClick={() => setReviewLevel(null)} className="btn-ghost">
                     Cancel
                   </button>
-                  <button
-                    onClick={submitReview}
-                    disabled={submitting}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {submitting ? 'Submitting...' : 'Submit Review'}
+                  <button onClick={submitReview} disabled={submitting} className="btn-primary">
+                    {submitting ? 'Submitting...' : 'Submit'}
                   </button>
                 </div>
               </div>
@@ -342,6 +331,6 @@ export default function ManagerDashboard() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
