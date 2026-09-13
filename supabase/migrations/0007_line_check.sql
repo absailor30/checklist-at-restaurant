@@ -17,7 +17,7 @@ create table if not exists line_check_questions (
 
 create table if not exists line_check_runs (
   id uuid primary key default gen_random_uuid(),
-  outlet_id uuid not null,
+  outlet_id uuid not null references outlets(id) on delete cascade,
   run_date date not null,
   created_at timestamptz not null default now(),
   unique (outlet_id, run_date)
