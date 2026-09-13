@@ -34,7 +34,9 @@ export async function POST(request: Request) {
       .eq('id', run_id)
       .single();
 
-    if (runError || !run || (run.outlets as any).org_id !== profile.org_id) {
+    const runOrgId = Array.isArray(run?.outlets) ? run.outlets[0]?.org_id : (run?.outlets as any)?.org_id;
+
+    if (runError || !run || runOrgId !== profile.org_id) {
        return NextResponse.json({ error: 'Invalid run_id' }, { status: 403 });
     }
 
