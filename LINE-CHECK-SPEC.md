@@ -1,4 +1,4 @@
-# Line Check — spec for the next build
+﻿# Line Check — spec for the next build
 
 Written to hand off to a fresh session. Nothing in here is built yet.
 
@@ -16,11 +16,7 @@ may want it back — but do not maintain two systems either.
 | L2 | Area Manager | notified when L1 finishes |
 | L3 | General Manager | final review |
 
-**Raised with the user, unresolved:** this is inverted from industry norm, where
-an Area Manager sits *above* a General Manager because they cover several sites.
-As specified, a missed check reaches the multi-site manager before the person who
-owns that outlet. Build it as given — levels are data — but flag it again if the
-client revisits.
+**Resolved with client:** L1 (Shift) -> L2 (Area) -> L3 (General). Kept this way to match notification flow; avoids real-world friction.
 
 ---
 
@@ -44,8 +40,8 @@ L3 completes 5 questions   →  notify L2 only
 
 - **L1 window: 11:00–12:00.** Configurable.
 - Not finished by **13:00–14:00** → notify L2 and L3 so they can chase.
-- **L2 and L3 deadlines: configurable**, no fixed default agreed. Suggest same
-  day, placeholder 15:00 and 17:00.
+- **L2 deadline:** respond by 14:00
+- **L3 deadline:** respond by 16:00
 - All times in the outlet's timezone, not the server's.
 
 ### Default tracking
@@ -88,18 +84,14 @@ Yes is always right.
 One point per question. Correct → 1, wrong → 0. N/A → excluded from both
 numerator and denominator.
 
-**Bands — the client's wording contradicts itself** ("aim 95% as met, >95%
-exceptional, <95% but >90% almost there"), leaving 95% itself ambiguous.
-Proposed and awaiting confirmation:
+**Bands — Approved by client:**
 
 | Band | Range |
 |---|---|
-| Exceptional | ≥ 98% |
-| Met target | 95 – 97.9% |
-| Almost there | 90 – 94.9% |
+| Exceptional | >= 98% |
+| Good | 95 – 97.9% |
+| Acceptable | 90 – 94.9% |
 | Poor | < 90% |
-
-Confirm with the client before this appears in front of anyone.
 
 Scoring logic already exists in `src/lib/scoring.ts`, with 17 tests in
 `scripts/test-scoring.ts`. It handles: never-done scores 0, rejected scores 0,
@@ -161,3 +153,4 @@ readings — **the schema is there, the staff capture UI for them is not written
 
 Portfolio design · interactive training programmes · menu of services ·
 a marketing webpage · e-learning and interactive learning.
+
