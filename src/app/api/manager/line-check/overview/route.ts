@@ -22,10 +22,6 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     let dateStr = searchParams.get('date');
-    if (!dateStr) {
-      // Default to today in UTC if no date provided
-      dateStr = new Date().toISOString().split('T')[0];
-    }
 
     const { data: outlets, error: outletsError } = await supabase
       .from('outlets')
@@ -43,24 +39,58 @@ export async function GET(request: Request) {
       return NextResponse.json({ outlets: [] });
     }
 
-    const { data: runs, error: runsError } = await supabase
-      .from('line_check_runs')
-      .select(`
-        id,
-        outlet_id,
-        run_date,
-        l2_completed_at,
-        l3_completed_at,
-        line_check_stations (
-          station_no,
-          status,
-          pause_reason
-        )
-      `)
-      .in('outlet_id', outlets.map((o: any) => o.id))
-      .eq('run_date', dateStr);
+    let runs: any[] = [];
 
-    if (runsError) throw runsError;
+    if (dateStr) {
+      const { data, error } = await supabase
+        .from('line_check_runs')
+        .select(`
+          id,
+          outlet_id,
+          run_date,
+          l2_completed_at,
+          l3_completed_at,
+          line_check_stations (
+            station_no,
+            status,
+            pause_reason
+          )
+        `)
+        .in('outlet_id', outlets.map((o: any) => o.id))
+        .eq('run_date', dateStr);
+
+      if (error) throw error;
+      runs = data || [];
+    } else {
+      const queries = outlets.map((outlet: any) => {
+        const tz = outlet.timezone || 'UTC';
+        const localDate = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+        return supabase
+          .from('line_check_runs')
+          .select(`
+            id,
+            outlet_id,
+            run_date,
+            l2_completed_at,
+            l3_completed_at,
+            line_check_stations (
+              station_no,
+              status,
+              pause_reason
+            )
+          `)
+          .eq('outlet_id', outlet.id)
+          .eq('run_date', localDate);
+      });
+
+      const results = await Promise.all(queries);
+      for (const res of results) {
+        if (res.error) throw res.error;
+        if (res.data) {
+          runs = runs.concat(res.data);
+        }
+      }
+    }
 
     const outletsWithRuns = outlets.map((outlet: any) => ({
       ...outlet,
