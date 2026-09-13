@@ -3,7 +3,9 @@ import { cronTokenMatches } from '@/lib/cron-auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ensureRuns, refreshLocks } from '@/lib/checklist';
 import { notify, recipientsForLock } from '@/lib/notify';
-import { todayIn } from '@/lib/time';
+import { todayIn, zonedToUtc } from '@/lib/time';
+import { L1_HARD_STOP } from '@/lib/line-check/questions';
+import { enforceLineCheckMisses } from '@/lib/line-check/cron';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -52,6 +54,12 @@ export async function GET(request: Request) {
 
       try {
         await ensureRuns(db, outlet, date);
+        
+        const cutoff = zonedToUtc(date, L1_HARD_STOP, outlet.timezone);
+        if (Date.now() >= cutoff.getTime()) {
+          await enforceLineCheckMisses(db, outlet.id, date);
+        }
+
         const changes = await refreshLocks(db, org, outlet.id, date);
         if (!changes.length) continue;
 
