@@ -157,3 +157,13 @@ export function compare(current: ScoreBreakdown, previous?: ScoreBreakdown) {
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
+
+export type ScoreBand = 'Exceptional' | 'Good' | 'Acceptable' | 'Poor';
+
+/** Client-locked bands. Empty scored set is not a band — callers treat 100% empty as N/A. */
+export function bandOf(percent: number): ScoreBand {
+  if (percent >= 98) return 'Exceptional';
+  if (percent >= 95) return 'Good';
+  if (percent >= 90) return 'Acceptable';
+  return 'Poor';
+}

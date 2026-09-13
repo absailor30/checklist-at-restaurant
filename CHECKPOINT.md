@@ -2,30 +2,34 @@
 
 ## Project Status
 
-The original 13-department checklist application is **archived but preserved** (moved to `archive/department-checklist/`). 
+13-department checklist remains in `archive/department-checklist/`.
 
-The current priority is building the new **L1/L2/L3 Line Check** as the main product.
+Current product: **L1/L2/L3 Line Check**.
 
-### ✅ What's Done
-1. **L1/L2/L3 Spec Updated**: `LINE-CHECK-SPEC.md` was updated with the client's locked-in decisions:
-   - Hierarchy: L1 (Shift) → L2 (Area) → L3 (General)
-   - Scoring Bands: Exceptional (≥98%), Good (95–97.9%), Acceptable (90–94.9%), Poor (<90%)
-   - Deadlines: L2 (14:00), L3 (16:00).
-2. **Old UI Archived**: The staff flow and endpoints were moved out of `src/` into `archive/department-checklist/`.
-3. **Scoring Engine Prepared**: `src/lib/scoring.ts` now calculates and returns the new bands for all section and overall scores. Tests are passing.
+### Locked with client this session
+- Open spec questions parked — do not re-ask.
+- **12:00 is the hard stop.** Unfinished station = miss. Pause reason stored.
+- L1 sample bank: 10 questions covering types 1–6 plus hand-wash hybrid.
+- Any temperature reading requires a photo.
+- Hand-wash: Yes → photo, No → written reason.
 
-### ⏳ Not Yet Implemented (Next Session's Focus)
-1. **Database Migration `0007_line_check.sql`**: Needs to define `line_check_questions`, `line_check_runs`, `line_check_answers`. 
-2. **Staff UI (L1)**: Build the Station 1/2/3 interface. **Requirement**: Stations must be independently pausable and resumable. A manager can stall Station 1 (e.g., for repairs) and move to Station 2 or 3 without losing data.
-3. **L2/L3 Views**: Approval logic, notifications, and dashboard.
+### Done
+1. Spec + checkpoint updated to the locked sample bank.
+2. `src/lib/line-check/questions.ts` — the 10 L1 questions.
+3. `src/lib/line-check/score-answer.ts` — per-question score + evidence gates.
+4. `src/lib/scoring.ts` — `bandOf()` for Exceptional / Good / Acceptable / Poor.
+5. `supabase/migrations/0007_line_check.sql` — questions, runs, stations, answers + seed.
+6. `src/app/staff/page.tsx` — reviewable L1 flow: 3 independent stations, one
+   question per page, pause with reason, photo/reason/numeric gates, live %.
 
-## 4 Open Questions to Proceed With (With Defaults)
-The previous session proposed these defaults. If acceptable, build them:
-1. **Notification firing**: Notify L2/L3 when *all three stations* complete, but show paused/blocked stations on L2's dashboard immediately so they know why a run is stalling.
-2. **Reopening stations**: L1 can reopen a `complete` station to fix things *until* L2 responds; after that, it locks (using existing lock/audit mechanics).
-3. **Open Spec Questions (q4-q6)**: L2 answers once per outlet; per-station and overall scores are tracked; a never-completed check scores 0 and is reported as a default.
-4. **Paused at deadline**: A station paused past the 12:00 deadline counts as a miss, but the "paused/blocked" reason is recorded so L3 sees *why* it was missed.
+Answers live in the browser for this review cut. Wire to 0007 tables next.
 
-## Recommended Next Steps
-1. Create `supabase/migrations/0007_line_check.sql`.
-2. Build the new `src/app/staff/page.tsx` for the Line Check flow.
+### Not yet
+1. Persist runs/answers to Supabase (staff login already exists).
+2. Apply 0007 on the live project.
+3. L2/L3 views, notifications when all three stations complete.
+4. Miss recording at 12:00 in outlet timezone.
+
+## Review
+Staff line check: `/staff` (home still redirects there).
+Sample only — no auth required on this cut so reviewers can tap through types.
