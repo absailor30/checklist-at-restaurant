@@ -22,8 +22,9 @@ Current product: **L1/L2/L3 Line Check**.
 6. `src/app/staff/page.tsx` — reviewable L1 flow: 3 independent stations, one
    question per page, pause with reason, photo/reason/numeric gates, live %.
 7. **Database sync API** — saving runs, stations, and answers securely with photo uploads.
-8. **Manager Dashboards** — L2 and L3 progressive unlock UI in `/manager`, old department UI archived.
+8. **Manager Dashboards** — L2 and L3 progressive unlock UI in `/manager`, old department UI archived. Includes 15-second live polling and local-timezone "On Time" / "Late" badging.
 9. **Cron Miss Logic** — 12:00 deadline logic running in `/api/cron/refresh`, respects local timezones and preserves pause reasons.
+10. **Database Push Fixed** — Migrations 0007 and 0008 foreign key bugs patched and schema deployed to production.
 
 ### Not yet
 1. Push notifications when L1 completes, triggering L2/L3 alerts.
