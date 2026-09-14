@@ -275,6 +275,11 @@ export default function StaffLineCheckPage() {
     patch(id, (s) => ({ ...s, index: s.index + 1, status: 'in_progress' }));
   }
 
+  function prev(id: number) {
+    setError(null);
+    patch(id, (s) => ({ ...s, index: Math.max(0, s.index - 1) }));
+  }
+
   // --- render -------------------------------------------------------------
 
   if (step === 'outlet') {
@@ -409,7 +414,10 @@ export default function StaffLineCheckPage() {
         {error && <p className="lede" style={{ color: 'var(--locked)' }}>{error}</p>}
 
         <div className="btn-row">
-          <button className="btn-ghost" onClick={() => next(active, q)} disabled={busy}>
+          <button className="btn-ghost" onClick={() => prev(active)} disabled={busy || st.index === 0}>
+            Back
+          </button>
+          <button className="btn-primary" onClick={() => next(active, q)} disabled={busy}>
             {busy ? 'Saving...' : st.index >= L1_QUESTIONS.length - 1 ? 'Complete station' : 'Next'}
           </button>
         </div>
