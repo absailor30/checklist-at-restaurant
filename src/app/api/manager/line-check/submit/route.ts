@@ -12,7 +12,7 @@ export async function POST(request: Request) {
 
     const { data: profile } = await supabase
       .from('users')
-      .select('org_id')
+      .select('org_id, roles(name)')
       .eq('auth_user_id', user.id)
       .single();
 
@@ -25,6 +25,18 @@ export async function POST(request: Request) {
 
     if (!run_id || !level || !answers || !Array.isArray(answers)) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+    }
+
+    if (level !== 'L2' && level !== 'L3') {
+      return NextResponse.json({ error: 'Invalid level' }, { status: 400 });
+    }
+
+    const roleName = Array.isArray(profile.roles) ? profile.roles[0]?.name : (profile.roles as any)?.name;
+    const allowed = level === 'L2'
+      ? roleName === 'Shift Manager'
+      : roleName === 'General Manager' || roleName === 'Owner';
+    if (!allowed) {
+      return NextResponse.json({ error: `${level} review is not available for your role.` }, { status: 403 });
     }
 
     // Verify run_id belongs to the manager's org

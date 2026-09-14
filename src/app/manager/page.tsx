@@ -16,6 +16,7 @@ export default function ManagerDashboard() {
   const [loginError, setLoginError] = useState('');
 
   const [outlets, setOutlets] = useState<any[]>([]);
+  const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -24,7 +25,11 @@ export default function ManagerDashboard() {
   const [reviewRunId, setReviewRunId] = useState<string | null>(null);
   const [questions, setQuestions] = useState<any[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [qIndex, setQIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+
+  const canReviewL2 = role === 'Shift Manager';
+  const canReviewL3 = role === 'General Manager' || role === 'Owner';
 
   const fetchOverview = async () => {
     try {
@@ -32,6 +37,7 @@ export default function ManagerDashboard() {
       if (!res.ok) throw new Error('Failed to fetch overview');
       const data = await res.json();
       setOutlets(data.outlets || []);
+      setRole(data.role || null);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -88,6 +94,7 @@ export default function ManagerDashboard() {
     setReviewLevel(level);
     setReviewRunId(runId);
     setAnswers({});
+    setQIndex(0);
     try {
       const res = await fetch(`/api/manager/line-check/questions?level=${level}`);
       if (!res.ok) throw new Error('Failed to fetch questions');
@@ -291,7 +298,9 @@ export default function ManagerDashboard() {
                       <div>
                         {l2Complete ? (
                           <span className="tag ok">Completed</span>
-                        ) : l1Complete ? (
+                        ) : !l1Complete ? (
+                          <span className="tag plain">Waiting for L1</span>
+                        ) : canReviewL2 ? (
                           <button
                             onClick={() => startReview(run.id, 'L2')}
                             className="btn-primary"
@@ -300,7 +309,7 @@ export default function ManagerDashboard() {
                             Review
                           </button>
                         ) : (
-                          <span className="tag plain">Waiting for L1</span>
+                          <span className="tag plain">Shift Manager only</span>
                         )}
                       </div>
                     </div>
@@ -309,7 +318,9 @@ export default function ManagerDashboard() {
                       <div>
                         {l3Complete ? (
                           <span className="tag ok">Completed</span>
-                        ) : l2Complete ? (
+                        ) : !l2Complete ? (
+                          <span className="tag plain">Waiting for L2</span>
+                        ) : canReviewL3 ? (
                           <button
                             onClick={() => startReview(run.id, 'L3')}
                             className="btn-primary"
@@ -318,7 +329,7 @@ export default function ManagerDashboard() {
                             Review
                           </button>
                         ) : (
-                          <span className="tag plain">Waiting for L2</span>
+                          <span className="tag plain">GM/Owner only</span>
                         )}
                       </div>
                     </div>
@@ -338,35 +349,51 @@ export default function ManagerDashboard() {
               <div className="spinner" />
             ) : (
               <div style={{ marginTop: 16 }}>
-                {questions.map((q, idx) => (
-                  <div key={q.id} className="card">
-                    <div className="tag plain">Q{idx + 1}</div>
-                    <h2 style={{ marginTop: 10, fontSize: 16 }}>{q.prompt}</h2>
-                    <div className="btn-row" style={{ marginTop: 12 }}>
-                      <button
-                        className={answers[q.id] === 'yes' ? 'btn-primary' : 'btn-ghost'}
-                        onClick={() => setAnswers(prev => ({ ...prev, [q.id]: 'yes' }))}
-                      >
-                        Yes
-                      </button>
-                      <button
-                        className={answers[q.id] === 'no' ? 'btn-primary' : 'btn-ghost'}
-                        onClick={() => setAnswers(prev => ({ ...prev, [q.id]: 'no' }))}
-                      >
-                        No
-                      </button>
+                {(() => {
+                  const q = questions[qIndex];
+                  const isLast = qIndex === questions.length - 1;
+                  return (
+                    <div key={q.id} className="card">
+                      <div className="tag plain">Q{qIndex + 1} of {questions.length}</div>
+                      <h2 style={{ marginTop: 10, fontSize: 16 }}>{q.prompt}</h2>
+                      <div className="btn-row" style={{ marginTop: 12 }}>
+                        <button
+                          className={answers[q.id] === 'yes' ? 'btn-primary' : 'btn-ghost'}
+                          onClick={() => setAnswers(prev => ({ ...prev, [q.id]: 'yes' }))}
+                        >
+                          Yes
+                        </button>
+                        <button
+                          className={answers[q.id] === 'no' ? 'btn-primary' : 'btn-ghost'}
+                          onClick={() => setAnswers(prev => ({ ...prev, [q.id]: 'no' }))}
+                        >
+                          No
+                        </button>
+                      </div>
+                      <div className="btn-row" style={{ marginTop: 20 }}>
+                        <button
+                          onClick={() => (qIndex === 0 ? setReviewLevel(null) : setQIndex(i => i - 1))}
+                          className="btn-ghost"
+                        >
+                          {qIndex === 0 ? 'Cancel' : 'Back'}
+                        </button>
+                        {isLast ? (
+                          <button onClick={submitReview} disabled={submitting || !answers[q.id]} className="btn-primary">
+                            {submitting ? 'Submitting...' : 'Submit'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setQIndex(i => i + 1)}
+                            disabled={!answers[q.id]}
+                            className="btn-primary"
+                          >
+                            Next
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
-
-                <div className="btn-row" style={{ marginTop: 20 }}>
-                  <button onClick={() => setReviewLevel(null)} className="btn-ghost">
-                    Cancel
-                  </button>
-                  <button onClick={submitReview} disabled={submitting} className="btn-primary">
-                    {submitting ? 'Submitting...' : 'Submit'}
-                  </button>
-                </div>
+                  );
+                })()}
               </div>
             )}
           </div>
