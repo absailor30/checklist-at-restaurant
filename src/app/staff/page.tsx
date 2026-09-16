@@ -52,6 +52,11 @@ function stationScore(answers: Record<string, LineCheckAnswer>) {
 
 const OUTLET_KEY = 'checklist.outletId';
 
+function draftKey(outletId: string, personId: string) {
+  const day = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  return `checklist.linecheck.draft.${outletId}.${personId}.${day}`;
+}
+
 export default function StaffLineCheckPage() {
   const [step, setStep] = useState<Step>('outlet');
   const [outlets, setOutlets] = useState<Outlet[]>([]);
@@ -150,7 +155,11 @@ export default function StaffLineCheckPage() {
       const data = await res.json();
       if (!res.ok) { setError(data.error); setPin(''); return; }
 
-      // Logged in!
+      // Logged in! Restore any in-progress answers from before a refresh/crash.
+      try {
+        const saved = localStorage.getItem(draftKey(outlet.id, person.id));
+        if (saved) setStations(JSON.parse(saved));
+      } catch { /* corrupt or missing draft, start fresh */ }
       setMe({ name: person.name, role: person.role });
       setStep('list');
     } finally {
@@ -160,7 +169,11 @@ export default function StaffLineCheckPage() {
 
   async function signOut() {
     await fetch('/api/staff/logout', { method: 'POST' });
+    if (outlet && person) {
+      try { localStorage.removeItem(draftKey(outlet.id, person.id)); } catch { /* ignore */ }
+    }
     setPerson(null); setPin(''); setMe(null);
+    setStations({ 1: emptyStation(), 2: emptyStation(), 3: emptyStation() });
     setStep('staff');
   }
 
@@ -178,6 +191,16 @@ export default function StaffLineCheckPage() {
   function patch(id: number, fn: (s: StationState) => StationState) {
     setStations((prev) => ({ ...prev, [id]: fn(prev[id]) }));
   }
+
+  // Mirror in-progress answers to localStorage so a refresh, crash, or locked
+  // phone mid-station doesn't silently wipe answers that haven't been synced
+  // to the server yet (sync only happens on pause or complete).
+  useEffect(() => {
+    if (step !== 'list' || !outlet || !person) return;
+    try {
+      localStorage.setItem(draftKey(outlet.id, person.id), JSON.stringify(stations));
+    } catch { /* storage full or unavailable, nothing we can do */ }
+  }, [stations, step, outlet, person]);
 
   function openStation(id: number) {
     setError(null);
