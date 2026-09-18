@@ -78,9 +78,9 @@ export async function provisionBrand(
   }
   const outletRows = input.outlets.map((o) => ({
     id: uuid(), org_id: orgId, name: o.name, address: null, timezone: input.timezone,
-    stationCount: Math.min(3, Math.max(1, o.stationCount ?? 3)),
+    station_count: Math.min(3, Math.max(1, o.stationCount ?? 3)),
   }));
-  await insert(db, 'outlets', outletRows.map(({ stationCount, ...row }) => row));
+  await insert(db, 'outlets', outletRows);
 
   // L2 and L3: one each, real accounts, covering every outlet in the brand.
   const l2Id = uuid();
@@ -130,7 +130,7 @@ export async function provisionBrand(
 
   return {
     orgId,
-    outlets: outletRows.map((o) => ({ id: o.id, name: o.name, stationCount: o.stationCount })),
+    outlets: outletRows.map((o) => ({ id: o.id, name: o.name, stationCount: o.station_count })),
     l1Count: l1Rows.length,
   };
 }

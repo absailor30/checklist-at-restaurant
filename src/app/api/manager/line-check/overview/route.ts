@@ -30,7 +30,8 @@ export async function GET(request: Request) {
       .select(`
         id,
         name,
-        timezone
+        timezone,
+        station_count
       `)
       .eq('org_id', profile.org_id)
       .order('name');

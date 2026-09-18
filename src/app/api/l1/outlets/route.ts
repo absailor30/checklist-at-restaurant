@@ -12,7 +12,7 @@ export async function GET() {
   const db = createAdminClient();
   const { data, error } = await db
     .from('outlets')
-    .select('id, name, org_id, timezone, is_active')
+    .select('id, name, org_id, timezone, is_active, station_count')
     .order('name');
 
   if (error) return json({ error: error.message }, { status: 500 });

@@ -225,12 +225,13 @@ export default function ManagerDashboard() {
               {SHIFTS.map(({ id: shift, label }) => {
                 const run = runs.find((r: any) => r.shift === shift) || null;
 
+                const stationCount = outlet.station_count ?? 3;
                 let stationsComplete = 0;
                 let l1Complete = false;
                 if (run && run.line_check_stations) {
                   const completes = run.line_check_stations.filter((s: any) => s.status === 'complete');
                   stationsComplete = completes.length;
-                  l1Complete = stationsComplete === 3;
+                  l1Complete = stationsComplete === stationCount;
                 }
 
                 const l2Complete = !!(run && run.l2_completed_at);
@@ -246,7 +247,7 @@ export default function ManagerDashboard() {
                   <div style={{ marginTop: 12 }}>
                     <div className="desc" style={{ marginBottom: 6 }}>L1 Stations</div>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      {[1, 2, 3].map(stNo => {
+                      {Array.from({ length: stationCount }, (_, i) => i + 1).map(stNo => {
                         const st = run.line_check_stations?.find((s: any) => s.station_no === stNo);
                         let statusText = 'Not Started';
                         let tagClass = 'plain';

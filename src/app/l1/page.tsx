@@ -9,7 +9,7 @@ import { NotificationBell } from '@/components/notifications';
 
 type Step = 'outlet' | 'staff' | 'pin' | 'list';
 
-interface Outlet { id: string; name: string; org_id: string; timezone: string }
+interface Outlet { id: string; name: string; org_id: string; timezone: string; station_count?: number }
 interface Staff { id: string; name: string; role: string; level: number; needsPin: boolean; shift?: string }
 
 type StationStatus = 'idle' | 'in_progress' | 'paused' | 'complete';
@@ -179,8 +179,12 @@ export default function StaffLineCheckPage() {
 
   // --- line check logic ---------------------------------------------------
 
+  // This outlet may run fewer than 3 stations — a smaller outlet doesn't
+  // need to pretend it has stations it doesn't.
+  const activeStations = STATIONS.slice(0, outlet?.station_count ?? 3);
+
   const overall = useMemo(() => {
-    const parts = STATIONS.map((s) => stationScore(stations[s.id].answers));
+    const parts = activeStations.map((s) => stationScore(stations[s.id].answers));
     const scored = parts.reduce((n, p) => n + p.scored, 0);
     const points = parts.reduce((n, p) => n + p.points, 0);
     const waived = parts.reduce((n, p) => n + p.waived, 0);
@@ -486,7 +490,7 @@ export default function StaffLineCheckPage() {
           {overall.band !== '—' ? ` · ${overall.band}` : ''}.
         </p>
 
-        {STATIONS.map((s) => {
+        {activeStations.map((s) => {
           const st = stations[s.id];
           const sc = stationScore(st.answers);
           const done = Object.keys(st.answers).length;

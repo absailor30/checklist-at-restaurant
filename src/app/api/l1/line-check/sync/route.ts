@@ -30,8 +30,12 @@ export async function POST(request: Request) {
   // For simplicity, use the server's current date or a passed in date.
   // We'll use the server's UTC date, or better, the outlet's timezone.
   // Let's fetch outlet to get timezone.
-  const { data: outlet } = await db.from('outlets').select('timezone').eq('id', session.outletId).single();
+  const { data: outlet } = await db.from('outlets').select('timezone, station_count').eq('id', session.outletId).single();
   const tz = outlet?.timezone || 'UTC';
+
+  if (stationNo > (outlet?.station_count ?? 3)) {
+    return json({ error: 'This outlet does not have that many stations.' }, { status: 400 });
+  }
 
   // Get current date string in outlet's timezone (YYYY-MM-DD)
   const runDate = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
