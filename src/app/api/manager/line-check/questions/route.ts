@@ -20,8 +20,8 @@ export async function GET(request: Request) {
         .single();
       const roleName = Array.isArray(profile?.roles) ? profile.roles[0]?.name : (profile?.roles as any)?.name;
       const allowed = level === 'L2'
-        ? roleName === 'Shift Manager'
-        : roleName === 'General Manager' || roleName === 'Owner';
+        ? roleName === 'L2 Manager' || roleName === 'Shift Manager'
+        : roleName === 'L3 Owner' || roleName === 'General Manager' || roleName === 'Owner';
       if (!allowed) {
         return NextResponse.json({ error: `${level} review is not available for your role.` }, { status: 403 });
       }

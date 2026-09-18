@@ -4,6 +4,12 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
+const SHIFTS = [
+  { id: 'morning', label: 'Morning shift' },
+  { id: 'afternoon', label: 'Afternoon shift' },
+  { id: 'evening', label: 'Evening shift' },
+] as const;
+
 export default function ManagerDashboard() {
   const router = useRouter();
   const supabase = createClient();
@@ -28,8 +34,8 @@ export default function ManagerDashboard() {
   const [qIndex, setQIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
-  const canReviewL2 = role === 'Shift Manager';
-  const canReviewL3 = role === 'General Manager' || role === 'Owner';
+  const canReviewL2 = role === 'L2 Manager' || role === 'Shift Manager';
+  const canReviewL3 = role === 'L3 Owner' || role === 'General Manager' || role === 'Owner';
 
   const fetchOverview = async () => {
     try {
@@ -182,8 +188,8 @@ export default function ManagerDashboard() {
             {loginBusy ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
-        <a className="btn btn-ghost" href="/staff" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 16, lineHeight: '22px' }}>
-          I'm floor staff
+        <a className="btn btn-ghost" href="/l1" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 16, lineHeight: '22px' }}>
+          I'm an L1 manager
         </a>
       </div>
     );
@@ -209,18 +215,6 @@ export default function ManagerDashboard() {
 
         {outlets.map(outlet => {
           const runs = outlet.line_check_runs || [];
-          const run = runs.length > 0 ? runs[0] : null; // assuming today's run
-
-          let stationsComplete = 0;
-          let l1Complete = false;
-          if (run && run.line_check_stations) {
-            const completes = run.line_check_stations.filter((s: any) => s.status === 'complete');
-            stationsComplete = completes.length;
-            l1Complete = stationsComplete === 3;
-          }
-
-          const l2Complete = !!(run && run.l2_completed_at);
-          const l3Complete = !!(run && run.l3_completed_at);
 
           return (
             <article key={outlet.id} className="item">
@@ -228,10 +222,27 @@ export default function ManagerDashboard() {
                 <div className="title">{outlet.name}</div>
               </div>
 
-              {!run ? (
-                <div className="desc">No line check started today.</div>
-              ) : (
-                <>
+              {SHIFTS.map(({ id: shift, label }) => {
+                const run = runs.find((r: any) => r.shift === shift) || null;
+
+                let stationsComplete = 0;
+                let l1Complete = false;
+                if (run && run.line_check_stations) {
+                  const completes = run.line_check_stations.filter((s: any) => s.status === 'complete');
+                  stationsComplete = completes.length;
+                  l1Complete = stationsComplete === 3;
+                }
+
+                const l2Complete = !!(run && run.l2_completed_at);
+                const l3Complete = !!(run && run.l3_completed_at);
+
+                return (
+                <div key={shift} style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                  <div className="desc" style={{ fontWeight: 600 }}>{label}</div>
+                  {!run ? (
+                    <div className="desc">Not started yet.</div>
+                  ) : (
+                  <>
                   <div style={{ marginTop: 12 }}>
                     <div className="desc" style={{ marginBottom: 6 }}>L1 Stations</div>
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -309,7 +320,7 @@ export default function ManagerDashboard() {
                             Review
                           </button>
                         ) : (
-                          <span className="tag plain">Shift Manager only</span>
+                          <span className="tag plain">L2 Manager only</span>
                         )}
                       </div>
                     </div>
@@ -329,13 +340,16 @@ export default function ManagerDashboard() {
                             Review
                           </button>
                         ) : (
-                          <span className="tag plain">GM/Owner only</span>
+                          <span className="tag plain">L3 Owner only</span>
                         )}
                       </div>
                     </div>
                   </div>
-                </>
-              )}
+                  </>
+                  )}
+                </div>
+                );
+              })}
             </article>
           );
         })}

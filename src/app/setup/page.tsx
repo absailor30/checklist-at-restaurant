@@ -2,6 +2,126 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
+function BrandOnboarding() {
+  const [brandName, setBrandName] = useState('');
+  const [outletCount, setOutletCount] = useState(3);
+  const [outletNames, setOutletNames] = useState<string[]>(['Outlet 1', 'Outlet 2', 'Outlet 3']);
+  const [stationCount, setStationCount] = useState(3);
+  const [l2Name, setL2Name] = useState(''); const [l2Email, setL2Email] = useState(''); const [l2Password, setL2Password] = useState('');
+  const [l3Name, setL3Name] = useState(''); const [l3Email, setL3Email] = useState(''); const [l3Password, setL3Password] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  function setCount(n: number) {
+    const count = Math.max(1, Math.min(200, n));
+    setOutletCount(count);
+    setOutletNames((prev) => {
+      const next = [...prev];
+      while (next.length < count) next.push(`Outlet ${next.length + 1}`);
+      return next.slice(0, count);
+    });
+  }
+
+  async function submitForm(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setError(null); setResult(null);
+    try {
+      const res = await fetch('/api/onboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandName,
+          outlets: outletNames.map((name) => ({ name, stationCount })),
+          l2Name, l2Email, l2Password,
+          l3Name, l3Email, l3Password,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error); return; }
+      setResult(`Created "${brandName}" — ${data.outlets.length} outlets, ${data.l1Count} L1 managers.`);
+    } catch {
+      setError('The request did not complete.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitExcel(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true); setError(null); setResult(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/onboard/excel', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error); return; }
+      setResult(`Created brand — ${data.outlets.length} outlets, ${data.l1Count} L1 managers.`);
+    } catch {
+      setError('The request did not complete.');
+    } finally {
+      setBusy(false);
+      e.target.value = '';
+    }
+  }
+
+  return (
+    <div className="card">
+      <strong>Onboard a new brand</strong>
+      <p className="lede" style={{ fontSize: 13, margin: '8px 0 12px' }}>
+        A brand gets its outlets, each with 3 stations and one L1 manager per
+        shift (morning/afternoon/evening), plus one L2 manager and one L3
+        owner covering every outlet. For more than a few outlets, or when
+        stations or shift-manager names differ per outlet, use the Excel
+        upload instead — download the{' '}
+        <a href="/onboarding-template.xlsx">template</a>, fill it in, and
+        upload it below.
+      </p>
+
+      {error && <div className="banner error">{error}</div>}
+      {result && <div className="banner info">{result}</div>}
+
+      <div style={{ marginBottom: 16 }}>
+        <label>Upload a filled-in Excel template</label>
+        <input type="file" accept=".xlsx" disabled={busy} onChange={submitExcel} />
+      </div>
+
+      <form onSubmit={submitForm}>
+        <label>Brand name</label>
+        <input value={brandName} onChange={(e) => setBrandName(e.target.value)} required />
+
+        <label>Number of outlets</label>
+        <input type="number" min={1} max={200} value={outletCount}
+          onChange={(e) => setCount(Number(e.target.value) || 1)} />
+
+        {outletNames.map((name, i) => (
+          <input key={i} value={name} style={{ marginTop: 6 }}
+            onChange={(e) => setOutletNames((prev) => prev.map((n, j) => j === i ? e.target.value : n))} />
+        ))}
+
+        <label style={{ marginTop: 12 }}>Stations per outlet (same for all)</label>
+        <input type="number" min={1} max={3} value={stationCount}
+          onChange={(e) => setStationCount(Math.max(1, Math.min(3, Number(e.target.value) || 3)))} />
+
+        <label style={{ marginTop: 12 }}>L2 manager</label>
+        <input placeholder="Name" value={l2Name} onChange={(e) => setL2Name(e.target.value)} required />
+        <input placeholder="Email" type="email" value={l2Email} onChange={(e) => setL2Email(e.target.value)} required style={{ marginTop: 6 }} />
+        <input placeholder="Password (10+ chars)" type="password" value={l2Password} onChange={(e) => setL2Password(e.target.value)} required style={{ marginTop: 6 }} />
+
+        <label style={{ marginTop: 12 }}>L3 owner</label>
+        <input placeholder="Name" value={l3Name} onChange={(e) => setL3Name(e.target.value)} required />
+        <input placeholder="Email" type="email" value={l3Email} onChange={(e) => setL3Email(e.target.value)} required style={{ marginTop: 6 }} />
+        <input placeholder="Password (10+ chars)" type="password" value={l3Password} onChange={(e) => setL3Password(e.target.value)} required style={{ marginTop: 6 }} />
+
+        <button className="btn-primary" type="submit" disabled={busy} style={{ marginTop: 16 }}>
+          {busy ? 'Creating…' : 'Create brand'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 // Browser-based setup, so a demo can be created or reset without a terminal.
 //
 // The page always shows what is actually in the database. An earlier version
@@ -82,6 +202,8 @@ export default function SetupPage() {
 
   return (
     <div className="shell" style={{ paddingTop: 40 }}>
+      <BrandOnboarding />
+
       <h2>Set up demo data</h2>
       <p className="lede">
         Creates the Spice Garden demo restaurant group with three outlets and two
@@ -208,7 +330,7 @@ export default function SetupPage() {
       <div className="btn-row">
         <a className="btn btn-ghost" href="/health"
            style={{ textAlign: 'center', textDecoration: 'none' }}>Health</a>
-        <a className="btn btn-primary" href="/staff"
+        <a className="btn btn-primary" href="/l1"
            style={{ textAlign: 'center', textDecoration: 'none' }}>Go to the app</a>
       </div>
     </div>

@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const db = createAdminClient();
   const { data, error } = await db
     .from('user_outlets')
-    .select('users!inner(id, name, is_active, pin_set_at, roles!inner(id, name, level))')
+    .select('users!inner(id, name, is_active, pin_set_at, shift, roles!inner(id, name, level))')
     .eq('outlet_id', outletId);
   if (error) return json({ error: error.message }, { status: 500 });
 
@@ -31,6 +31,7 @@ export async function GET(request: Request) {
         name: u.name,
         role: role.name,
         level: role.level,
+        shift: u.shift,
         // Drives "set your PIN" vs "enter your PIN" on first use.
         needsPin: !u.pin_set_at,
       };
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
   const db = createAdminClient();
   const { data: user, error } = await db
     .from('users')
-    .select('id, org_id, name, role_id, pin_hash, pin_set_at, is_active')
+    .select('id, org_id, name, role_id, pin_hash, pin_set_at, is_active, shift')
     .eq('id', userId)
     .single();
 
@@ -84,10 +85,11 @@ export async function POST(request: Request) {
   const token = encodeSession({
     userId: user.id, orgId: user.org_id, outletId,
     roleId: user.role_id, name: user.name,
+    l1Shift: user.shift ?? undefined,
   });
 
   // Session responses carry a cookie and must never be cached either.
-  const response = NextResponse.json({ ok: true, name: user.name });
+  const response = NextResponse.json({ ok: true, name: user.name, shift: user.shift });
   response.headers.set('Cache-Control', 'no-store');
   response.cookies.set(sessionCookie(token));
   return response;

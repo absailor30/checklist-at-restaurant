@@ -20,6 +20,10 @@ export async function POST(request: Request) {
     return json({ error: 'Invalid station number.' }, { status: 400 });
   }
 
+  // Accounts predating the shift system default to 'morning' rather than
+  // breaking their sync outright.
+  const shift = session.l1Shift ?? 'morning';
+
   const db = createAdminClient();
 
   // Find or create run for today (using outlet's timezone or simple date)
@@ -35,7 +39,7 @@ export async function POST(request: Request) {
   // Upsert the run
   const { data: run, error: runError } = await db
     .from('line_check_runs')
-    .upsert({ outlet_id: session.outletId, run_date: runDate }, { onConflict: 'outlet_id, run_date' })
+    .upsert({ outlet_id: session.outletId, run_date: runDate, shift }, { onConflict: 'outlet_id, run_date, shift' })
     .select('id')
     .single();
 

@@ -19,6 +19,7 @@ export interface StaffSession {
   roleId: string;
   name: string;
   shiftId?: string;
+  l1Shift?: 'morning' | 'afternoon' | 'evening';
   exp: number;
 }
 

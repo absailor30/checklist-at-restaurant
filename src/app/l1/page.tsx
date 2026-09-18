@@ -10,7 +10,7 @@ import { NotificationBell } from '@/components/notifications';
 type Step = 'outlet' | 'staff' | 'pin' | 'list';
 
 interface Outlet { id: string; name: string; org_id: string; timezone: string }
-interface Staff { id: string; name: string; role: string; level: number; needsPin: boolean }
+interface Staff { id: string; name: string; role: string; level: number; needsPin: boolean; shift?: string }
 
 type StationStatus = 'idle' | 'in_progress' | 'paused' | 'complete';
 
@@ -85,7 +85,7 @@ export default function StaffLineCheckPage() {
   useEffect(() => {
     (async () => {
       const ask = (attempt: number) =>
-        fetch(`/api/staff/outlets?t=${Date.now()}-${attempt}`, {
+        fetch(`/api/l1/outlets?t=${Date.now()}-${attempt}`, {
           cache: 'no-store',
           headers: { 'Cache-Control': 'no-cache' },
         });
@@ -128,7 +128,7 @@ export default function StaffLineCheckPage() {
   }, []);
 
   const loadStaff = useCallback(async (o: Outlet) => {
-    const res = await fetch(`/api/staff/login?outletId=${o.id}&t=${Date.now()}`, { cache: 'no-store' });
+    const res = await fetch(`/api/l1/login?outletId=${o.id}&t=${Date.now()}`, { cache: 'no-store' });
     const data = await res.json();
     setStaff(data.staff ?? []);
     setStep('staff');
@@ -147,7 +147,7 @@ export default function StaffLineCheckPage() {
     if (!person || !outlet) return;
     setBusy(true); setError(null);
     try {
-      const res = await fetch('/api/staff/login', {
+      const res = await fetch('/api/l1/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: person.id, outletId: outlet.id, pin: value }),
@@ -168,7 +168,7 @@ export default function StaffLineCheckPage() {
   }
 
   async function signOut() {
-    await fetch('/api/staff/logout', { method: 'POST' });
+    await fetch('/api/l1/logout', { method: 'POST' });
     if (outlet && person) {
       try { localStorage.removeItem(draftKey(outlet.id, person.id)); } catch { /* ignore */ }
     }
@@ -242,7 +242,7 @@ export default function StaffLineCheckPage() {
 
     setBusy(true);
     try {
-      const res = await fetch('/api/staff/line-check/sync', { method: 'POST', body: form });
+      const res = await fetch('/api/l1/line-check/sync', { method: 'POST', body: form });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         setError(d.error || 'Failed to sync station');
@@ -352,12 +352,14 @@ export default function StaffLineCheckPage() {
             onClick={() => { setPerson(s); setPin(''); setError(null); setStep('pin'); }}>
             <span>
               <span className="name">{s.name}</span>
-              <span className="meta">{s.role}{s.needsPin ? ' · set your PIN' : ''}</span>
+              <span className="meta">
+                {s.role}{s.shift ? ` · ${s.shift} shift` : ''}{s.needsPin ? ' · set your PIN' : ''}
+              </span>
             </span>
             <span className="chev">›</span>
           </button>
         ))}
-        {staff.length === 0 && <p className="empty">No staff set up for this outlet yet.</p>}
+        {staff.length === 0 && <p className="empty">No L1 managers set up for this outlet yet.</p>}
         <a className="btn btn-ghost" href="/manager"
           style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 16 }}>
           Manager sign in

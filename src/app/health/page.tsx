@@ -50,7 +50,7 @@ export default function HealthPage() {
       <div className="btn-row" style={{ marginTop: 20 }}>
         <a className="btn btn-ghost" href="/setup"
            style={{ textAlign: 'center', textDecoration: 'none' }}>Setup</a>
-        <a className="btn btn-primary" href="/staff"
+        <a className="btn btn-primary" href="/l1"
            style={{ textAlign: 'center', textDecoration: 'none' }}>App</a>
       </div>
     </div>

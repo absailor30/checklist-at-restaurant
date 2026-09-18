@@ -50,6 +50,7 @@ export async function GET(request: Request) {
           id,
           outlet_id,
           run_date,
+          shift,
           l2_completed_at,
           l3_completed_at,
           line_check_stations (
@@ -74,6 +75,7 @@ export async function GET(request: Request) {
             id,
             outlet_id,
             run_date,
+            shift,
             l2_completed_at,
             l3_completed_at,
             line_check_stations (
