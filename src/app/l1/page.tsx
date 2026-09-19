@@ -239,6 +239,7 @@ export default function StaffLineCheckPage() {
         yesNo: a.yesNo,
         value: a.value,
         reason: a.reason,
+        flagged: a.flagged ?? false,
       });
     }
 
@@ -551,17 +552,24 @@ function QuestionCard({
   onChange: (partial: Partial<LineCheckAnswer>) => void;
 }) {
   const yesNo = (v: YesNoNa) => onChange({ yesNo: v });
+  const [showComment, setShowComment] = useState(false);
+  const [showMedia, setShowMedia] = useState(false);
+
+  const commentRequired = needsReason(q, a);
+  const mediaRequired = needsPhoto(q, a) || q.kind === 'numeric_photo';
+  const commentOpen = showComment || commentRequired || Boolean(a?.reason);
+  const mediaOpen = showMedia || mediaRequired || Boolean(a?.photoDataUrl);
 
   return (
     <article className="card">
-      <div className="tag plain">Q{q.order} · {kindLabel(q.kind)}</div>
+      <div className="tag plain">Q{q.order}</div>
       <h2 style={{ marginTop: 10 }}>{q.prompt}</h2>
       {q.notes && <p className="lede">{q.notes}</p>}
       {q.expected && q.kind !== 'numeric_photo' && (
         <p className="lede">Expected: {q.expected}</p>
       )}
 
-      {q.kind === 'numeric_photo' ? (
+      {q.kind === 'numeric_photo' && (
         <>
           <label htmlFor="temp">Reading {q.unit ?? ''}</label>
           <input
@@ -571,47 +579,66 @@ function QuestionCard({
             value={a?.value ?? ''}
             onChange={(e) => onChange({ value: e.target.value === '' ? null : Number(e.target.value) })}
           />
-          <PhotoField value={a?.photoDataUrl} onPick={(url) => onChange({ photoDataUrl: url })} required />
         </>
-      ) : (
+      )}
+
+      {q.kind !== 'numeric_photo' && (
+        <div className="btn-row" style={{ marginTop: 12 }}>
+          <button className={a?.yesNo === 'yes' ? 'btn-primary' : 'btn-ghost'} onClick={() => yesNo('yes')}>
+            Yes
+          </button>
+          <button className={a?.yesNo === 'no' ? 'btn-primary' : 'btn-ghost'} onClick={() => yesNo('no')}>
+            No
+          </button>
+          <button className={a?.yesNo === 'na' ? 'btn-primary' : 'btn-ghost'} onClick={() => yesNo('na')}>
+            N/A
+          </button>
+        </div>
+      )}
+
+      <div className="btn-row" style={{ marginTop: 12 }}>
+        <button
+          type="button"
+          className={commentOpen ? 'btn-primary' : 'btn-ghost'}
+          onClick={() => setShowComment((v) => !v)}
+          aria-pressed={commentOpen}
+          title="Comment"
+        >
+          💬 Comment{commentRequired ? ' *' : ''}
+        </button>
+        <button
+          type="button"
+          className={mediaOpen ? 'btn-primary' : 'btn-ghost'}
+          onClick={() => setShowMedia((v) => !v)}
+          aria-pressed={mediaOpen}
+          title="Attach photo"
+        >
+          📎 Media{mediaRequired ? ' *' : ''}
+        </button>
+        <button
+          type="button"
+          className={a?.flagged ? 'btn-primary' : 'btn-ghost'}
+          onClick={() => onChange({ flagged: !a?.flagged })}
+          aria-pressed={Boolean(a?.flagged)}
+          title="Flag for follow-up"
+        >
+          🚩 Flag
+        </button>
+      </div>
+
+      {commentOpen && (
         <>
-          <div className="btn-row" style={{ marginTop: 12 }}>
-            <button
-              className={a?.yesNo === 'yes' ? 'btn-primary' : 'btn-ghost'}
-              onClick={() => yesNo('yes')}
-            >
-              Yes
-            </button>
-            <button
-              className={a?.yesNo === 'no' ? 'btn-primary' : 'btn-ghost'}
-              onClick={() => yesNo('no')}
-            >
-              No
-            </button>
-            {q.kind === 'yes_no_na' && (
-              <button
-                className={a?.yesNo === 'na' ? 'btn-primary' : 'btn-ghost'}
-                onClick={() => yesNo('na')}
-              >
-                N/A
-              </button>
-            )}
-          </div>
-          {needsPhoto(q, a) && (
-            <PhotoField value={a?.photoDataUrl} onPick={(url) => onChange({ photoDataUrl: url })} required />
-          )}
-          {needsReason(q, a) && (
-            <>
-              <label htmlFor="reason">Reason</label>
-              <textarea
-                id="reason"
-                value={a?.reason ?? ''}
-                onChange={(e) => onChange({ reason: e.target.value })}
-                placeholder="What failed and what you did"
-              />
-            </>
-          )}
+          <label htmlFor="reason">Comment {commentRequired ? '(required)' : '(optional)'}</label>
+          <textarea
+            id="reason"
+            value={a?.reason ?? ''}
+            onChange={(e) => onChange({ reason: e.target.value })}
+            placeholder="What failed and what you did"
+          />
         </>
+      )}
+      {mediaOpen && (
+        <PhotoField value={a?.photoDataUrl} onPick={(url) => onChange({ photoDataUrl: url })} required={mediaRequired} />
       )}
     </article>
   );
@@ -629,17 +656,6 @@ function needsReason(q: LineCheckQuestion, a: LineCheckAnswer | undefined) {
   return false;
 }
 
-function kindLabel(kind: LineCheckQuestion['kind']) {
-  switch (kind) {
-    case 'yes_no': return 'Yes / No';
-    case 'yes_no_photo_on_no': return 'Photo if No';
-    case 'yes_no_photo_always': return 'Photo always';
-    case 'numeric_photo': return 'Temp + photo';
-    case 'yes_no_na': return 'Yes / No / N/A';
-    case 'yes_no_reason_on_no': return 'Reason if No';
-    case 'yes_photo_no_reason': return 'Photo if Yes · reason if No';
-  }
-}
 
 function PhotoField({
   value,

@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { PHOTO_BUCKET } from '@/lib/storage';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   try {
@@ -20,10 +25,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
     }
 
-    const body = await request.json();
-    const { run_id, level, answers } = body;
+    const form = await request.formData();
+    const run_id = form.get('run_id') as string | null;
+    const level = form.get('level') as string | null;
+    const answers = JSON.parse((form.get('answers') as string) ?? '[]');
 
-    if (!run_id || !level || !answers || !Array.isArray(answers)) {
+    if (!run_id || !level || !Array.isArray(answers)) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
@@ -42,7 +49,7 @@ export async function POST(request: Request) {
     // Verify run_id belongs to the manager's org
     const { data: run, error: runError } = await supabase
       .from('line_check_runs')
-      .select('outlets(org_id)')
+      .select('outlet_id, outlets(org_id)')
       .eq('id', run_id)
       .single();
 
@@ -52,15 +59,34 @@ export async function POST(request: Request) {
        return NextResponse.json({ error: 'Invalid run_id' }, { status: 403 });
     }
 
-    // Insert answers
-    const answersToInsert = answers.map((a: any) => ({
-      run_id,
-      question_id: a.question_id,
-      yes_no: a.yes_no,
-      value_number: a.value_number,
-      photo_path: a.photo_path,
-      reason: a.reason
-    }));
+    // Photos go to the same private bucket as L1 evidence, so uploading needs
+    // the admin client — the manager's own RLS session has no storage grant.
+    const admin = createAdminClient();
+
+    const answersToInsert = [];
+    for (const a of answers) {
+      const photoFile = form.get(`photo_${a.question_id}`) as File | null;
+      let photoPath: string | null = null;
+      if (photoFile && photoFile.size > 0) {
+        photoPath = `${profile.org_id}/${run.outlet_id}/${run_id}/${level.toLowerCase()}_${a.question_id}_${Date.now()}.jpg`;
+        const { error: uploadError } = await admin.storage
+          .from(PHOTO_BUCKET)
+          .upload(photoPath, photoFile, { contentType: 'image/jpeg', upsert: true });
+        if (uploadError) {
+          console.error('Photo upload failed:', uploadError);
+          photoPath = null;
+        }
+      }
+      answersToInsert.push({
+        run_id,
+        question_id: a.question_id,
+        yes_no: a.yes_no,
+        value_number: a.value_number,
+        reason: a.reason,
+        flagged: Boolean(a.flagged),
+        ...(photoPath ? { photo_path: photoPath } : {}),
+      });
+    }
 
     const { error: insertError } = await supabase
       .from('line_check_manager_answers')

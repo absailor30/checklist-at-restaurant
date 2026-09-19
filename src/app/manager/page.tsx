@@ -30,7 +30,10 @@ export default function ManagerDashboard() {
   const [reviewLevel, setReviewLevel] = useState<'L2' | 'L3' | null>(null);
   const [reviewRunId, setReviewRunId] = useState<string | null>(null);
   const [questions, setQuestions] = useState<any[]>([]);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, { yesNo?: string; reason?: string; flagged?: boolean }>>({});
+  const [photos, setPhotos] = useState<Record<string, File>>({});
+  const [showComment, setShowComment] = useState<Set<string>>(new Set());
+  const [showMedia, setShowMedia] = useState<Set<string>>(new Set());
   const [qIndex, setQIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
@@ -100,6 +103,9 @@ export default function ManagerDashboard() {
     setReviewLevel(level);
     setReviewRunId(runId);
     setAnswers({});
+    setPhotos({});
+    setShowComment(new Set());
+    setShowMedia(new Set());
     setQIndex(0);
     try {
       const res = await fetch(`/api/manager/line-check/questions?level=${level}`);
@@ -124,13 +130,22 @@ export default function ManagerDashboard() {
     try {
       const formattedAnswers = Object.entries(answers).map(([qId, val]) => ({
         question_id: qId,
-        yes_no: val,
+        yes_no: val.yesNo,
+        reason: val.reason,
+        flagged: Boolean(val.flagged),
       }));
+
+      const form = new FormData();
+      form.append('run_id', reviewRunId);
+      form.append('level', reviewLevel);
+      form.append('answers', JSON.stringify(formattedAnswers));
+      for (const [qId, file] of Object.entries(photos)) {
+        form.append(`photo_${qId}`, file);
+      }
 
       const res = await fetch('/api/manager/line-check/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ run_id: reviewRunId, level: reviewLevel, answers: formattedAnswers }),
+        body: form,
       });
 
       if (!res.ok) throw new Error('Failed to submit review');
@@ -374,24 +389,74 @@ export default function ManagerDashboard() {
                 {(() => {
                   const q = questions[qIndex];
                   const isLast = qIndex === questions.length - 1;
+                  const a = answers[q.id] || {};
+                  const setA = (partial: typeof a) =>
+                    setAnswers(prev => ({ ...prev, [q.id]: { ...prev[q.id], ...partial } }));
+                  const commentOpen = showComment.has(q.id) || Boolean(a.reason);
+                  const mediaOpen = showMedia.has(q.id) || Boolean(photos[q.id]);
+
                   return (
                     <div key={q.id} className="card">
                       <div className="tag plain">Q{qIndex + 1} of {questions.length}</div>
                       <h2 style={{ marginTop: 10, fontSize: 16 }}>{q.prompt}</h2>
                       <div className="btn-row" style={{ marginTop: 12 }}>
-                        <button
-                          className={answers[q.id] === 'yes' ? 'btn-primary' : 'btn-ghost'}
-                          onClick={() => setAnswers(prev => ({ ...prev, [q.id]: 'yes' }))}
-                        >
+                        <button className={a.yesNo === 'yes' ? 'btn-primary' : 'btn-ghost'} onClick={() => setA({ yesNo: 'yes' })}>
                           Yes
                         </button>
-                        <button
-                          className={answers[q.id] === 'no' ? 'btn-primary' : 'btn-ghost'}
-                          onClick={() => setAnswers(prev => ({ ...prev, [q.id]: 'no' }))}
-                        >
+                        <button className={a.yesNo === 'no' ? 'btn-primary' : 'btn-ghost'} onClick={() => setA({ yesNo: 'no' })}>
                           No
                         </button>
+                        <button className={a.yesNo === 'na' ? 'btn-primary' : 'btn-ghost'} onClick={() => setA({ yesNo: 'na' })}>
+                          N/A
+                        </button>
                       </div>
+
+                      <div className="btn-row" style={{ marginTop: 12 }}>
+                        <button
+                          type="button"
+                          className={commentOpen ? 'btn-primary' : 'btn-ghost'}
+                          onClick={() => setShowComment(prev => new Set(prev).add(q.id))}
+                        >
+                          💬 Comment
+                        </button>
+                        <button
+                          type="button"
+                          className={mediaOpen ? 'btn-primary' : 'btn-ghost'}
+                          onClick={() => setShowMedia(prev => new Set(prev).add(q.id))}
+                        >
+                          📎 Media
+                        </button>
+                        <button
+                          type="button"
+                          className={a.flagged ? 'btn-primary' : 'btn-ghost'}
+                          onClick={() => setA({ flagged: !a.flagged })}
+                        >
+                          🚩 Flag
+                        </button>
+                      </div>
+
+                      {commentOpen && (
+                        <textarea
+                          style={{ marginTop: 12 }}
+                          value={a.reason ?? ''}
+                          onChange={(e) => setA({ reason: e.target.value })}
+                          placeholder="Comment"
+                        />
+                      )}
+                      {mediaOpen && (
+                        <div style={{ marginTop: 12 }}>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) setPhotos(prev => ({ ...prev, [q.id]: file }));
+                            }}
+                          />
+                        </div>
+                      )}
+
                       <div className="btn-row" style={{ marginTop: 20 }}>
                         <button
                           onClick={() => (qIndex === 0 ? setReviewLevel(null) : setQIndex(i => i - 1))}
@@ -400,13 +465,13 @@ export default function ManagerDashboard() {
                           {qIndex === 0 ? 'Cancel' : 'Back'}
                         </button>
                         {isLast ? (
-                          <button onClick={submitReview} disabled={submitting || !answers[q.id]} className="btn-primary">
+                          <button onClick={submitReview} disabled={submitting || !a.yesNo} className="btn-primary">
                             {submitting ? 'Submitting...' : 'Submit'}
                           </button>
                         ) : (
                           <button
                             onClick={() => setQIndex(i => i + 1)}
-                            disabled={!answers[q.id]}
+                            disabled={!a.yesNo}
                             className="btn-primary"
                           >
                             Next

@@ -108,6 +108,7 @@ export async function POST(request: Request) {
         yes_no: a.yesNo,
         value_number: a.value,
         reason: a.reason,
+        flagged: Boolean(a.flagged),
         ...(photoPath ? { photo_path: photoPath } : {})
       }, { onConflict: 'station_id, question_id' });
 

@@ -8,6 +8,7 @@ export interface LineCheckAnswer {
   value?: number | null;
   photoDataUrl?: string | null;
   reason?: string | null;
+  flagged?: boolean;
 }
 
 export function inRange(q: LineCheckQuestion, value: number): boolean {
@@ -42,7 +43,9 @@ export function scoreAnswer(
   a: LineCheckAnswer | undefined
 ): 1 | 0 | null {
   if (!a) return 0;
-  if (q.kind === 'yes_no_na' && a.yesNo === 'na') return null;
+  // N/A is a uniform option on every yes/no-style question, not just the
+  // ones originally typed yes_no_na — it always excludes rather than fails.
+  if (q.kind !== 'numeric_photo' && a.yesNo === 'na') return null;
   if (!evidenceOk(q, a)) return 0;
 
   if (q.kind === 'numeric_photo') {
@@ -59,6 +62,8 @@ export function canAdvance(q: LineCheckQuestion, a: LineCheckAnswer | undefined)
   if (q.kind === 'numeric_photo') {
     return a.value !== null && a.value !== undefined && !Number.isNaN(a.value) && Boolean(a.photoDataUrl);
   }
+  // N/A always needs nothing further — there's nothing to prove.
+  if (a.yesNo === 'na') return true;
   if (q.kind === 'yes_no_na') return a.yesNo === 'yes' || a.yesNo === 'no' || a.yesNo === 'na';
   if (q.kind === 'yes_photo_no_reason') {
     if (a.yesNo === 'yes') return Boolean(a.photoDataUrl);
