@@ -205,9 +205,16 @@ export default function ManagerDashboard() {
           <h1>Manager Dashboard</h1>
           <div className="sub">Line Check Reviews</div>
         </div>
-        <button className="btn-ghost" style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }} onClick={handleLogout}>
-          Sign out
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {canReviewL3 && (
+            <a className="btn-ghost" href="/l3" style={{ width: 'auto', minHeight: 40, padding: '8px 14px', display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
+              Report
+            </a>
+          )}
+          <button className="btn-ghost" style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }} onClick={handleLogout}>
+            Sign out
+          </button>
+        </div>
       </div>
 
       <div className="shell">
