@@ -11,6 +11,9 @@ export interface LineCheckAnswer {
   photoPath?: string | null;
   reason?: string | null;
   flagged?: boolean;
+  /** AI photo check — informational only, null means it never ran. */
+  aiVerified?: boolean | null;
+  aiNote?: string | null;
 }
 
 export function inRange(q: LineCheckQuestion, value: number): boolean {

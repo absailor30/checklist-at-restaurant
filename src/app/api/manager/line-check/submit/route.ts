@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { PHOTO_BUCKET } from '@/lib/storage';
+import { verifyPhoto } from '@/lib/ai-verify';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -63,10 +64,18 @@ export async function POST(request: Request) {
     // the admin client — the manager's own RLS session has no storage grant.
     const admin = createAdminClient();
 
+    const { data: questionRows } = await admin
+      .from('line_check_questions')
+      .select('id, prompt')
+      .in('id', answers.map((a: any) => a.question_id));
+    const promptById = new Map((questionRows ?? []).map((q: any) => [q.id, q.prompt]));
+
     const answersToInsert = [];
     for (const a of answers) {
       const photoFile = form.get(`photo_${a.question_id}`) as File | null;
       let photoPath: string | null = null;
+      let aiVerified: boolean | null = null;
+      let aiNote: string | null = null;
       if (photoFile && photoFile.size > 0) {
         photoPath = `${profile.org_id}/${run.outlet_id}/${run_id}/${level.toLowerCase()}_${a.question_id}_${Date.now()}.jpg`;
         const { error: uploadError } = await admin.storage
@@ -75,6 +84,10 @@ export async function POST(request: Request) {
         if (uploadError) {
           console.error('Photo upload failed:', uploadError);
           photoPath = null;
+        } else {
+          const bytes = Buffer.from(await photoFile.arrayBuffer());
+          const result = await verifyPhoto(bytes.toString('base64'), photoFile.type || 'image/jpeg', promptById.get(a.question_id) ?? a.question_id);
+          if (result) { aiVerified = result.verified; aiNote = result.note; }
         }
       }
       answersToInsert.push({
@@ -85,6 +98,7 @@ export async function POST(request: Request) {
         reason: a.reason,
         flagged: Boolean(a.flagged),
         ...(photoPath ? { photo_path: photoPath } : {}),
+        ...(aiVerified !== null ? { ai_verified: aiVerified, ai_note: aiNote } : {}),
       });
     }
 

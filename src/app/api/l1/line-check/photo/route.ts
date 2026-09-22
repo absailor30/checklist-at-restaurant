@@ -2,6 +2,8 @@ import { json } from '@/lib/no-store';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { readSession } from '@/lib/session';
 import { PHOTO_BUCKET } from '@/lib/storage';
+import { L1_QUESTIONS } from '@/lib/line-check/questions';
+import { verifyPhoto } from '@/lib/ai-verify';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -34,5 +36,15 @@ export async function POST(request: Request) {
     .upload(photoPath, file, { contentType: 'image/jpeg', upsert: true });
 
   if (error) return json({ error: error.message }, { status: 500 });
-  return json({ ok: true, photoPath });
+
+  let aiVerified: boolean | null = null;
+  let aiNote: string | null = null;
+  const question = L1_QUESTIONS.find((q) => q.id === questionId);
+  if (question) {
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const result = await verifyPhoto(bytes.toString('base64'), file.type || 'image/jpeg', question.prompt);
+    if (result) { aiVerified = result.verified; aiNote = result.note; }
+  }
+
+  return json({ ok: true, photoPath, aiVerified, aiNote });
 }

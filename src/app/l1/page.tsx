@@ -232,6 +232,8 @@ export default function StaffLineCheckPage() {
       reason: a.reason,
       flagged: a.flagged ?? false,
       photoPath: a.photoPath ?? null,
+      aiVerified: a.aiVerified ?? null,
+      aiNote: a.aiNote ?? null,
     }));
 
     form.append('answers', JSON.stringify(answersArray));
@@ -637,7 +639,7 @@ function QuestionCard({
           value={a?.photoDataUrl}
           questionId={q.id}
           stationNo={stationNo}
-          onUploaded={(photoDataUrl, photoPath) => onChange({ photoDataUrl, photoPath })}
+          onUploaded={(photoDataUrl, photoPath, aiVerified, aiNote) => onChange({ photoDataUrl, photoPath, aiVerified, aiNote })}
           required={mediaRequired}
         />
       )}
@@ -668,11 +670,12 @@ function PhotoField({
   value?: string | null;
   questionId: string;
   stationNo: number;
-  onUploaded: (photoDataUrl: string, photoPath: string) => void;
+  onUploaded: (photoDataUrl: string, photoPath: string, aiVerified: boolean | null, aiNote: string | null) => void;
   required?: boolean;
 }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [aiResult, setAiResult] = useState<{ verified: boolean | null; note: string | null } | null>(null);
 
   return (
     <>
@@ -697,7 +700,8 @@ function PhotoField({
             const res = await fetch('/api/l1/line-check/photo', { method: 'POST', body: form });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || 'Photo upload failed.');
-            onUploaded(preview, data.photoPath);
+            setAiResult(data.aiVerified === null ? null : { verified: data.aiVerified, note: data.aiNote });
+            onUploaded(preview, data.photoPath, data.aiVerified ?? null, data.aiNote ?? null);
           } catch (err: any) {
             setUploadError(err.message || 'Photo upload failed.');
           } finally {
@@ -709,6 +713,12 @@ function PhotoField({
       {uploading && <p className="lede">Uploading…</p>}
       {uploadError && <p className="lede" style={{ color: 'var(--locked)' }}>{uploadError}</p>}
       {value && <img className="preview" src={value} alt="Attached evidence" />}
+      {aiResult && aiResult.verified === false && (
+        <p className="lede" style={{ color: 'var(--locked)' }}>⚠️ AI check: {aiResult.note}</p>
+      )}
+      {aiResult && aiResult.verified === true && (
+        <p className="lede" style={{ color: 'var(--ok, green)' }}>✅ AI check passed</p>
+      )}
     </>
   );
 }

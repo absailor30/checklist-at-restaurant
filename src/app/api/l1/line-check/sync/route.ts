@@ -97,7 +97,8 @@ export async function POST(request: Request) {
         value_number: a.value,
         reason: a.reason,
         flagged: Boolean(a.flagged),
-        ...(a.photoPath ? { photo_path: a.photoPath } : {})
+        ...(a.photoPath ? { photo_path: a.photoPath } : {}),
+        ...(a.aiVerified !== undefined && a.aiVerified !== null ? { ai_verified: a.aiVerified, ai_note: a.aiNote ?? null } : {}),
       }, { onConflict: 'station_id, question_id' });
 
     if (ansError) {
