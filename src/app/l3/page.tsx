@@ -133,6 +133,9 @@ export default function L3ReportPage() {
           <a className="btn btn-ghost" href={`/api/l3/export?days=${days}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
             Export CSV
           </a>
+          <a className="btn btn-ghost" href={`/api/l3/export/pdf?days=${days}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
+            Export PDF
+          </a>
         </div>
 
         {loading ? <div className="spinner" /> : (
