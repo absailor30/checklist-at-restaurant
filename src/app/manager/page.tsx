@@ -48,6 +48,14 @@ export default function ManagerDashboard() {
   const [newL1Outlet, setNewL1Outlet] = useState('');
   const [teamBusy, setTeamBusy] = useState(false);
   const [teamMessage, setTeamMessage] = useState('');
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [scheduleOutlets, setScheduleOutlets] = useState<any[]>([]);
+  const [newSchedTitle, setNewSchedTitle] = useState('');
+  const [newSchedFreq, setNewSchedFreq] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
+  const [newSchedOutlet, setNewSchedOutlet] = useState('');
+  const [newSchedDay, setNewSchedDay] = useState(1);
+  const [schedBusy, setSchedBusy] = useState(false);
+  const [schedMessage, setSchedMessage] = useState('');
 
   const canReviewL2 = role === 'L2 Manager' || role === 'Shift Manager';
   const canReviewL3 = role === 'L3 Owner' || role === 'General Manager' || role === 'Owner';
@@ -116,6 +124,51 @@ export default function ManagerDashboard() {
     void fetchTeam();
   };
 
+  const fetchSchedules = async () => {
+    try {
+      const res = await fetch('/api/manager/schedules');
+      const data = await res.json();
+      if (res.ok) {
+        setSchedules(data.schedules || []);
+        setScheduleOutlets(data.outlets || []);
+      }
+    } catch { /* non-critical */ }
+  };
+
+  const addSchedule = async () => {
+    if (newSchedTitle.trim().length < 3) return;
+    setSchedBusy(true);
+    setSchedMessage('');
+    try {
+      const res = await fetch('/api/manager/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newSchedTitle.trim(), frequency: newSchedFreq, outletId: newSchedOutlet || null,
+          dayOfWeek: newSchedFreq === 'weekly' ? newSchedDay : undefined,
+          dayOfMonth: newSchedFreq === 'monthly' ? newSchedDay : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setSchedMessage(data.error); return; }
+      setNewSchedTitle('');
+      void fetchSchedules();
+    } catch {
+      setSchedMessage('The request did not complete.');
+    } finally {
+      setSchedBusy(false);
+    }
+  };
+
+  const completeSchedule = async (row: any) => {
+    await fetch('/api/manager/schedules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'complete', scheduleId: row.scheduleId, outletId: row.outletId, periodKey: row.periodKey }),
+    });
+    void fetchSchedules();
+  };
+
   const addQuestion = async () => {
     if (newQPrompt.trim().length < 3) return;
     setNewQBusy(true);
@@ -155,6 +208,7 @@ export default function ManagerDashboard() {
         fetchOverview();
         fetchActions();
         fetchTeam();
+        fetchSchedules();
       }
     });
 
@@ -164,6 +218,7 @@ export default function ManagerDashboard() {
         fetchOverview();
         fetchActions();
         fetchTeam();
+        fetchSchedules();
       } else {
         setSessionState('out');
       }
@@ -180,6 +235,7 @@ export default function ManagerDashboard() {
       fetchOverview();
       fetchActions();
       fetchTeam();
+      fetchSchedules();
     }, 15000);
     return () => clearInterval(interval);
   }, [sessionState]);
@@ -392,6 +448,57 @@ export default function ManagerDashboard() {
             ))}
           </div>
         )}
+
+        <div className="card" style={{ marginBottom: 16 }}>
+          <strong>Recurring schedules</strong>
+          <p className="lede" style={{ fontSize: 13, margin: '8px 0 12px' }}>
+            Separate from the daily L1/L2/L3 line check — for weekly audits, monthly deep-cleans, and anything else on its own cadence.
+          </p>
+
+          {canReviewL3 && (
+            <>
+              {schedMessage && <div className="banner info" style={{ marginBottom: 8 }}>{schedMessage}</div>}
+              <input placeholder="Title, e.g. Weekly grease trap audit" value={newSchedTitle} onChange={(e) => setNewSchedTitle(e.target.value)} />
+              <div className="btn-row" style={{ marginTop: 6 }}>
+                {(['daily', 'weekly', 'monthly'] as const).map((f) => (
+                  <button key={f} className={newSchedFreq === f ? 'btn-primary' : 'btn-ghost'} onClick={() => setNewSchedFreq(f)}>{f}</button>
+                ))}
+              </div>
+              {newSchedFreq === 'weekly' && (
+                <select value={newSchedDay} onChange={(e) => setNewSchedDay(Number(e.target.value))} style={{ marginTop: 6 }}>
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => <option key={i} value={i}>{d}</option>)}
+                </select>
+              )}
+              {newSchedFreq === 'monthly' && (
+                <input type="number" min={1} max={31} value={newSchedDay} onChange={(e) => setNewSchedDay(Number(e.target.value))} style={{ marginTop: 6 }} placeholder="Day of month" />
+              )}
+              <select value={newSchedOutlet} onChange={(e) => setNewSchedOutlet(e.target.value)} style={{ marginTop: 6 }}>
+                <option value="">All outlets</option>
+                {scheduleOutlets.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+              <button className="btn-primary" style={{ marginTop: 8 }} disabled={schedBusy || newSchedTitle.trim().length < 3} onClick={addSchedule}>
+                {schedBusy ? 'Adding…' : 'Add schedule'}
+              </button>
+            </>
+          )}
+
+          <p className="lede" style={{ fontSize: 13, margin: '16px 0 4px' }}>Due now</p>
+          {schedules.filter((s) => s.due && !s.completed).length === 0 && (
+            <div className="desc">Nothing due right now.</div>
+          )}
+          {schedules.filter((s) => s.due && !s.completed).map((s, i) => (
+            <div key={i} className="lockbox" style={{ marginTop: 6 }}>
+              <div className="row">
+                <span className="label">{s.title}</span>
+                <span className="tag warn">{s.frequency}</span>
+              </div>
+              <div className="desc">{s.outletName}</div>
+              <button className="btn-ghost" style={{ marginTop: 6, width: 'auto' }} onClick={() => completeSchedule(s)}>
+                Mark done
+              </button>
+            </div>
+          ))}
+        </div>
 
         {actions.length > 0 && (
           <div className="card" style={{ marginBottom: 16 }}>
