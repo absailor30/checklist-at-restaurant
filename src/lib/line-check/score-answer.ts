@@ -7,6 +7,8 @@ export interface LineCheckAnswer {
   yesNo?: YesNoNa;
   value?: number | null;
   photoDataUrl?: string | null;
+  /** Storage path once the photo has actually been uploaded. */
+  photoPath?: string | null;
   reason?: string | null;
   flagged?: boolean;
 }

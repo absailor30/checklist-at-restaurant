@@ -222,26 +222,17 @@ export default function StaffLineCheckPage() {
     form.append('status', status);
     if (pReason) form.append('pauseReason', pReason);
 
-    // Extract photos and clear dataUrls from JSON
-    const answersArray = [];
-    for (const [qId, a] of Object.entries(st.answers)) {
-      if (a.photoDataUrl) {
-        try {
-          const res = await fetch(a.photoDataUrl);
-          const blob = await res.blob();
-          form.append(`photo_${qId}`, blob, `photo_${qId}.jpg`);
-        } catch (e) {
-          console.error("Failed to extract photo for", qId);
-        }
-      }
-      answersArray.push({
-        questionId: qId,
-        yesNo: a.yesNo,
-        value: a.value,
-        reason: a.reason,
-        flagged: a.flagged ?? false,
-      });
-    }
+    // Photos are uploaded immediately on capture (see PhotoField), so this
+    // request only ever carries small JSON — no more bundling every
+    // question's photo into one giant request at completion time.
+    const answersArray = Object.entries(st.answers).map(([qId, a]) => ({
+      questionId: qId,
+      yesNo: a.yesNo,
+      value: a.value,
+      reason: a.reason,
+      flagged: a.flagged ?? false,
+      photoPath: a.photoPath ?? null,
+    }));
 
     form.append('answers', JSON.stringify(answersArray));
 
@@ -436,8 +427,10 @@ export default function StaffLineCheckPage() {
         </div>
 
         <QuestionCard
+          key={q.id}
           q={q}
           a={a}
+          stationNo={active}
           onChange={(partial) => setAnswer(active, q, partial)}
         />
 
@@ -545,10 +538,12 @@ function Screen({ title, lede, children, onBack, backLabel }: {
 function QuestionCard({
   q,
   a,
+  stationNo,
   onChange,
 }: {
   q: LineCheckQuestion;
   a: LineCheckAnswer | undefined;
+  stationNo: number;
   onChange: (partial: Partial<LineCheckAnswer>) => void;
 }) {
   const yesNo = (v: YesNoNa) => onChange({ yesNo: v });
@@ -638,7 +633,13 @@ function QuestionCard({
         </>
       )}
       {mediaOpen && (
-        <PhotoField value={a?.photoDataUrl} onPick={(url) => onChange({ photoDataUrl: url })} required={mediaRequired} />
+        <PhotoField
+          value={a?.photoDataUrl}
+          questionId={q.id}
+          stationNo={stationNo}
+          onUploaded={(photoDataUrl, photoPath) => onChange({ photoDataUrl, photoPath })}
+          required={mediaRequired}
+        />
       )}
     </article>
   );
@@ -659,13 +660,20 @@ function needsReason(q: LineCheckQuestion, a: LineCheckAnswer | undefined) {
 
 function PhotoField({
   value,
-  onPick,
+  questionId,
+  stationNo,
+  onUploaded,
   required,
 }: {
   value?: string | null;
-  onPick: (url: string) => void;
+  questionId: string;
+  stationNo: number;
+  onUploaded: (photoDataUrl: string, photoPath: string) => void;
   required?: boolean;
 }) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   return (
     <>
       <label htmlFor="photo">Photo {required ? '(required)' : '(optional)'}</label>
@@ -674,11 +682,32 @@ function PhotoField({
         type="file"
         accept="image/*"
         capture="environment"
+        disabled={uploading}
         onChange={async (e) => {
           const file = e.target.files?.[0];
-          if (file) onPick(await fileToDataUrl(file));
+          if (!file) return;
+          setUploading(true);
+          setUploadError(null);
+          try {
+            const preview = await fileToDataUrl(file);
+            const form = new FormData();
+            form.append('file', file);
+            form.append('questionId', questionId);
+            form.append('stationNo', stationNo.toString());
+            const res = await fetch('/api/l1/line-check/photo', { method: 'POST', body: form });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Photo upload failed.');
+            onUploaded(preview, data.photoPath);
+          } catch (err: any) {
+            setUploadError(err.message || 'Photo upload failed.');
+          } finally {
+            setUploading(false);
+            e.target.value = '';
+          }
         }}
       />
+      {uploading && <p className="lede">Uploading…</p>}
+      {uploadError && <p className="lede" style={{ color: 'var(--locked)' }}>{uploadError}</p>}
       {value && <img className="preview" src={value} alt="Attached evidence" />}
     </>
   );

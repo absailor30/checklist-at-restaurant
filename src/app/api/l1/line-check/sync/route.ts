@@ -1,7 +1,6 @@
 import { json } from '@/lib/no-store';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { readSession } from '@/lib/session';
-import { PHOTO_BUCKET } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -86,20 +85,8 @@ export async function POST(request: Request) {
   for (const a of answers) {
     const questionId = a.questionId;
 
-    // Check if there is a photo in the form
-    const photoFile = form.get(`photo_${questionId}`) as File | null;
-    let photoPath = null;
-    if (photoFile && photoFile.size > 0) {
-      photoPath = `${session.orgId}/${session.outletId}/${runDate}/st${stationNo}_${questionId}_${Date.now()}.jpg`;
-      const { error: uploadError } = await db.storage
-        .from(PHOTO_BUCKET)
-        .upload(photoPath, photoFile, { contentType: 'image/jpeg', upsert: true });
-      if (uploadError) {
-        console.error('Photo upload failed:', uploadError);
-        photoPath = null; // Maybe fail or proceed without photo? We proceed.
-      }
-    }
-
+    // Photos are uploaded immediately on capture via /api/l1/line-check/photo
+    // — this request just carries the resulting path, never file bytes.
     const { error: ansError } = await db
       .from('line_check_answers')
       .upsert({
@@ -109,7 +96,7 @@ export async function POST(request: Request) {
         value_number: a.value,
         reason: a.reason,
         flagged: Boolean(a.flagged),
-        ...(photoPath ? { photo_path: photoPath } : {})
+        ...(a.photoPath ? { photo_path: a.photoPath } : {})
       }, { onConflict: 'station_id, question_id' });
 
     if (ansError) {
