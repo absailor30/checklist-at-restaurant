@@ -36,6 +36,7 @@ export default function ManagerDashboard() {
   const [showMedia, setShowMedia] = useState<Set<string>>(new Set());
   const [qIndex, setQIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [actions, setActions] = useState<any[]>([]);
 
   const canReviewL2 = role === 'L2 Manager' || role === 'Shift Manager';
   const canReviewL3 = role === 'L3 Owner' || role === 'General Manager' || role === 'Owner';
@@ -54,6 +55,23 @@ export default function ManagerDashboard() {
     }
   };
 
+  const fetchActions = async () => {
+    try {
+      const res = await fetch('/api/manager/corrective-actions');
+      const data = await res.json();
+      if (res.ok) setActions(data.actions || []);
+    } catch { /* non-critical */ }
+  };
+
+  const resolveAction = async (id: string) => {
+    await fetch('/api/manager/corrective-actions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    void fetchActions();
+  };
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
@@ -61,6 +79,7 @@ export default function ManagerDashboard() {
       } else {
         setSessionState('in');
         fetchOverview();
+        fetchActions();
       }
     });
 
@@ -68,6 +87,7 @@ export default function ManagerDashboard() {
       if (session) {
         setSessionState('in');
         fetchOverview();
+        fetchActions();
       } else {
         setSessionState('out');
       }
@@ -82,6 +102,7 @@ export default function ManagerDashboard() {
     if (sessionState !== 'in') return;
     const interval = setInterval(() => {
       fetchOverview();
+      fetchActions();
     }, 15000);
     return () => clearInterval(interval);
   }, [sessionState]);
@@ -153,6 +174,7 @@ export default function ManagerDashboard() {
       setReviewLevel(null);
       setReviewRunId(null);
       fetchOverview();
+      fetchActions();
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -233,6 +255,28 @@ export default function ManagerDashboard() {
       </div>
 
       <div className="shell">
+        {actions.length > 0 && (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <strong>Corrective actions ({actions.length} open)</strong>
+            {actions.map((a) => (
+              <div key={a.id} className="lockbox" style={{ marginTop: 8 }}>
+                <div className="row">
+                  <span className="label">{a.outlets?.name ?? ''} · {a.source.toUpperCase()}</span>
+                  <span className="tag warn">{a.assigned_role}</span>
+                </div>
+                <div className="desc" style={{ marginTop: 4 }}>{a.description}</div>
+                <button
+                  className="btn-ghost"
+                  style={{ marginTop: 8, width: 'auto' }}
+                  onClick={() => resolveAction(a.id)}
+                >
+                  Mark resolved
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {outlets.length === 0 && <p className="empty">No outlets found.</p>}
 
         {outlets.map(outlet => {

@@ -106,6 +106,35 @@ export async function POST(request: Request) {
 
     if (updateError) throw updateError;
 
+    // A flagged answer becomes an open corrective action one tier up (L3
+    // flags stay with L3 — there's no tier above it).
+    const flaggedAnswers = answers.filter((a: any) => a.flagged);
+    if (flaggedAnswers.length) {
+      const assignedRole = level === 'L2' ? 'L3 Owner' : 'L3 Owner';
+      const today = new Date().toISOString().slice(0, 10);
+      for (const a of flaggedAnswers) {
+        const { data: existing } = await admin
+          .from('corrective_actions')
+          .select('id')
+          .eq('outlet_id', run.outlet_id)
+          .eq('question_id', a.question_id)
+          .eq('source', level.toLowerCase())
+          .eq('status', 'open')
+          .gte('created_at', `${today}T00:00:00Z`)
+          .maybeSingle();
+        if (!existing) {
+          await admin.from('corrective_actions').insert({
+            org_id: profile.org_id,
+            outlet_id: run.outlet_id,
+            source: level.toLowerCase(),
+            question_id: a.question_id,
+            description: a.reason || a.question_id,
+            assigned_role: assignedRole,
+          });
+        }
+      }
+    }
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Manager submit error:', error);

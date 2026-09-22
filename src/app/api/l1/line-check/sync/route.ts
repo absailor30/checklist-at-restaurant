@@ -1,6 +1,7 @@
 import { json } from '@/lib/no-store';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { readSession } from '@/lib/session';
+import { L1_QUESTIONS } from '@/lib/line-check/questions';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -101,6 +102,33 @@ export async function POST(request: Request) {
 
     if (ansError) {
       console.error('Answer upsert failed:', ansError);
+    }
+
+    // A flagged answer becomes an open corrective action for L2 to act on,
+    // rather than the flag just sitting on the answer unnoticed. One per
+    // outlet+question+day is enough — repeat syncs of the same flag must
+    // not pile up duplicates.
+    if (a.flagged) {
+      const { data: existing } = await db
+        .from('corrective_actions')
+        .select('id')
+        .eq('outlet_id', session.outletId)
+        .eq('question_id', questionId)
+        .eq('source', 'l1')
+        .eq('status', 'open')
+        .gte('created_at', `${runDate}T00:00:00Z`)
+        .maybeSingle();
+      if (!existing) {
+        const q = L1_QUESTIONS.find((q) => q.id === questionId);
+        await db.from('corrective_actions').insert({
+          org_id: session.orgId,
+          outlet_id: session.outletId,
+          source: 'l1',
+          question_id: questionId,
+          description: q?.prompt ?? questionId,
+          assigned_role: 'L2 Manager',
+        });
+      }
     }
   }
 
