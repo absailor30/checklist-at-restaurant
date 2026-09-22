@@ -41,6 +41,13 @@ export default function ManagerDashboard() {
   const [newQPrompt, setNewQPrompt] = useState('');
   const [newQBusy, setNewQBusy] = useState(false);
   const [newQMessage, setNewQMessage] = useState('');
+  const [team, setTeam] = useState<any[]>([]);
+  const [teamOutlets, setTeamOutlets] = useState<any[]>([]);
+  const [newL1Name, setNewL1Name] = useState('');
+  const [newL1Shift, setNewL1Shift] = useState<'morning' | 'afternoon' | 'evening'>('morning');
+  const [newL1Outlet, setNewL1Outlet] = useState('');
+  const [teamBusy, setTeamBusy] = useState(false);
+  const [teamMessage, setTeamMessage] = useState('');
 
   const canReviewL2 = role === 'L2 Manager' || role === 'Shift Manager';
   const canReviewL3 = role === 'L3 Owner' || role === 'General Manager' || role === 'Owner';
@@ -65,6 +72,48 @@ export default function ManagerDashboard() {
       const data = await res.json();
       if (res.ok) setActions(data.actions || []);
     } catch { /* non-critical */ }
+  };
+
+  const fetchTeam = async () => {
+    try {
+      const res = await fetch('/api/manager/team');
+      const data = await res.json();
+      if (res.ok) {
+        setTeam(data.users || []);
+        setTeamOutlets(data.outlets || []);
+        if (!newL1Outlet && data.outlets?.[0]) setNewL1Outlet(data.outlets[0].id);
+      }
+    } catch { /* non-critical */ }
+  };
+
+  const addL1 = async () => {
+    if (newL1Name.trim().length < 2 || !newL1Outlet) return;
+    setTeamBusy(true);
+    setTeamMessage('');
+    try {
+      const res = await fetch('/api/manager/team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add_l1', name: newL1Name.trim(), shift: newL1Shift, outletId: newL1Outlet }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setTeamMessage(data.error); return; }
+      setNewL1Name('');
+      void fetchTeam();
+    } catch {
+      setTeamMessage('The request did not complete.');
+    } finally {
+      setTeamBusy(false);
+    }
+  };
+
+  const deactivateUser = async (userId: string) => {
+    await fetch('/api/manager/team', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'deactivate', userId }),
+    });
+    void fetchTeam();
   };
 
   const addQuestion = async () => {
@@ -105,6 +154,7 @@ export default function ManagerDashboard() {
         setSessionState('in');
         fetchOverview();
         fetchActions();
+        fetchTeam();
       }
     });
 
@@ -113,6 +163,7 @@ export default function ManagerDashboard() {
         setSessionState('in');
         fetchOverview();
         fetchActions();
+        fetchTeam();
       } else {
         setSessionState('out');
       }
@@ -128,6 +179,7 @@ export default function ManagerDashboard() {
     const interval = setInterval(() => {
       fetchOverview();
       fetchActions();
+      fetchTeam();
     }, 15000);
     return () => clearInterval(interval);
   }, [sessionState]);
@@ -200,6 +252,7 @@ export default function ManagerDashboard() {
       setReviewRunId(null);
       fetchOverview();
       fetchActions();
+      fetchTeam();
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -300,6 +353,43 @@ export default function ManagerDashboard() {
             <button className="btn-primary" style={{ marginTop: 8 }} disabled={newQBusy || newQPrompt.trim().length < 3} onClick={addQuestion}>
               {newQBusy ? 'Adding…' : 'Add question'}
             </button>
+          </div>
+        )}
+
+        {canReviewL3 && (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <strong>Team</strong>
+            {teamMessage && <div className="banner info" style={{ margin: '8px 0' }}>{teamMessage}</div>}
+
+            <p className="lede" style={{ fontSize: 13, margin: '8px 0 4px' }}>Add an L1 manager</p>
+            <input placeholder="Name" value={newL1Name} onChange={(e) => setNewL1Name(e.target.value)} />
+            <div className="btn-row" style={{ marginTop: 6 }}>
+              {(['morning', 'afternoon', 'evening'] as const).map((s) => (
+                <button key={s} className={newL1Shift === s ? 'btn-primary' : 'btn-ghost'} onClick={() => setNewL1Shift(s)}>
+                  {s}
+                </button>
+              ))}
+            </div>
+            <select value={newL1Outlet} onChange={(e) => setNewL1Outlet(e.target.value)} style={{ marginTop: 6 }}>
+              {teamOutlets.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+            <button className="btn-primary" style={{ marginTop: 8 }} disabled={teamBusy || newL1Name.trim().length < 2} onClick={addL1}>
+              {teamBusy ? 'Adding…' : 'Add L1 manager'}
+            </button>
+
+            <p className="lede" style={{ fontSize: 13, margin: '16px 0 4px' }}>Everyone on the team</p>
+            {team.filter((u: any) => u.isActive).map((u: any) => (
+              <div key={u.id} className="lockbox" style={{ marginTop: 6 }}>
+                <div className="row">
+                  <span className="label">{u.name}</span>
+                  <span className="tag plain">{u.role}{u.shift ? ` · ${u.shift}` : ''}</span>
+                </div>
+                <div className="desc">{u.outlets.join(', ') || 'No outlet'}</div>
+                <button className="btn-ghost" style={{ marginTop: 6, width: 'auto' }} onClick={() => deactivateUser(u.id)}>
+                  Deactivate
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
