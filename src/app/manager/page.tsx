@@ -37,6 +37,10 @@ export default function ManagerDashboard() {
   const [qIndex, setQIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [actions, setActions] = useState<any[]>([]);
+  const [newQLevel, setNewQLevel] = useState<'L2' | 'L3'>('L2');
+  const [newQPrompt, setNewQPrompt] = useState('');
+  const [newQBusy, setNewQBusy] = useState(false);
+  const [newQMessage, setNewQMessage] = useState('');
 
   const canReviewL2 = role === 'L2 Manager' || role === 'Shift Manager';
   const canReviewL3 = role === 'L3 Owner' || role === 'General Manager' || role === 'Owner';
@@ -61,6 +65,27 @@ export default function ManagerDashboard() {
       const data = await res.json();
       if (res.ok) setActions(data.actions || []);
     } catch { /* non-critical */ }
+  };
+
+  const addQuestion = async () => {
+    if (newQPrompt.trim().length < 3) return;
+    setNewQBusy(true);
+    setNewQMessage('');
+    try {
+      const res = await fetch('/api/manager/line-check/questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: newQLevel, prompt: newQPrompt.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setNewQMessage(data.error); return; }
+      setNewQMessage('Added — it will appear on the next review.');
+      setNewQPrompt('');
+    } catch {
+      setNewQMessage('The request did not complete.');
+    } finally {
+      setNewQBusy(false);
+    }
   };
 
   const resolveAction = async (id: string) => {
@@ -255,6 +280,29 @@ export default function ManagerDashboard() {
       </div>
 
       <div className="shell">
+        {canReviewL3 && (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <strong>Add a question</strong>
+            <p className="lede" style={{ fontSize: 13, margin: '8px 0 12px' }}>
+              Adds a question just for your brand's L2 or L3 review. The standard questions stay as they are for every brand.
+            </p>
+            {newQMessage && <div className="banner info" style={{ marginBottom: 8 }}>{newQMessage}</div>}
+            <div className="btn-row">
+              <button className={newQLevel === 'L2' ? 'btn-primary' : 'btn-ghost'} onClick={() => setNewQLevel('L2')}>L2</button>
+              <button className={newQLevel === 'L3' ? 'btn-primary' : 'btn-ghost'} onClick={() => setNewQLevel('L3')}>L3</button>
+            </div>
+            <textarea
+              style={{ marginTop: 8 }}
+              value={newQPrompt}
+              onChange={(e) => setNewQPrompt(e.target.value)}
+              placeholder="e.g. Was the walk-in freezer log signed today?"
+            />
+            <button className="btn-primary" style={{ marginTop: 8 }} disabled={newQBusy || newQPrompt.trim().length < 3} onClick={addQuestion}>
+              {newQBusy ? 'Adding…' : 'Add question'}
+            </button>
+          </div>
+        )}
+
         {actions.length > 0 && (
           <div className="card" style={{ marginBottom: 16 }}>
             <strong>Corrective actions ({actions.length} open)</strong>
