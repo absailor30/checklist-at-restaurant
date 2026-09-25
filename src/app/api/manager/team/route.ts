@@ -15,7 +15,7 @@ export async function GET() {
   const db = createAdminClient();
   const { data: users, error } = await db
     .from('users')
-    .select('id, name, email, shift, is_active, roles(name, level), user_outlets(outlets(id, name))')
+    .select('id, name, email, shift, is_active, approved, roles(name, level), user_outlets(outlets(id, name))')
     .eq('org_id', manager.orgId)
     .order('is_active', { ascending: false });
 
@@ -26,7 +26,7 @@ export async function GET() {
   return NextResponse.json({
     outlets: outlets ?? [],
     users: (users ?? []).map((u: any) => ({
-      id: u.id, name: u.name, email: u.email, shift: u.shift, isActive: u.is_active,
+      id: u.id, name: u.name, email: u.email, shift: u.shift, isActive: u.is_active, approved: u.approved,
       role: Array.isArray(u.roles) ? u.roles[0]?.name : u.roles?.name,
       level: Array.isArray(u.roles) ? u.roles[0]?.level : u.roles?.level,
       outlets: (u.user_outlets ?? []).map((uo: any) => (Array.isArray(uo.outlets) ? uo.outlets[0] : uo.outlets)?.name).filter(Boolean),
@@ -61,6 +61,26 @@ export async function POST(request: Request) {
     if (insertError || !user) return NextResponse.json({ error: insertError?.message ?? 'Could not create user.' }, { status: 500 });
 
     await db.from('user_outlets').insert({ user_id: user.id, outlet_id: outletId });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === 'approve') {
+    const { userId } = body;
+    if (!userId) return NextResponse.json({ error: 'userId required.' }, { status: 400 });
+    const { data: target } = await db.from('users').select('org_id').eq('id', userId).maybeSingle();
+    if (!target || target.org_id !== manager.orgId) return NextResponse.json({ error: 'User not found.' }, { status: 404 });
+    await db.from('users').update({ approved: true }).eq('id', userId);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === 'reject') {
+    const { userId } = body;
+    if (!userId) return NextResponse.json({ error: 'userId required.' }, { status: 400 });
+    const { data: target } = await db.from('users').select('org_id, approved').eq('id', userId).maybeSingle();
+    if (!target || target.org_id !== manager.orgId) return NextResponse.json({ error: 'User not found.' }, { status: 404 });
+    if (target.approved) return NextResponse.json({ error: 'Already approved — deactivate instead.' }, { status: 400 });
+    await db.from('user_outlets').delete().eq('user_id', userId);
+    await db.from('users').delete().eq('id', userId);
     return NextResponse.json({ ok: true });
   }
 

@@ -115,6 +115,24 @@ export default function ManagerDashboard() {
     }
   };
 
+  const approveUser = async (userId: string) => {
+    await fetch('/api/manager/team', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'approve', userId }),
+    });
+    void fetchTeam();
+  };
+
+  const rejectUser = async (userId: string) => {
+    await fetch('/api/manager/team', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reject', userId }),
+    });
+    void fetchTeam();
+  };
+
   const deactivateUser = async (userId: string) => {
     await fetch('/api/manager/team', {
       method: 'POST',
@@ -433,8 +451,27 @@ export default function ManagerDashboard() {
               {teamBusy ? 'Adding…' : 'Add L1 manager'}
             </button>
 
+            {team.filter((u: any) => u.isActive && !u.approved).length > 0 && (
+              <>
+                <p className="lede" style={{ fontSize: 13, margin: '16px 0 4px' }}>Pending approval</p>
+                {team.filter((u: any) => u.isActive && !u.approved).map((u: any) => (
+                  <div key={u.id} className="lockbox" style={{ marginTop: 6 }}>
+                    <div className="row">
+                      <span className="label">{u.name}</span>
+                      <span className="tag warn">{u.role}{u.shift ? ` · ${u.shift}` : ''}</span>
+                    </div>
+                    <div className="desc">{u.outlets.join(', ') || 'No outlet'}</div>
+                    <div className="btn-row" style={{ marginTop: 6 }}>
+                      <button className="btn-primary" style={{ width: 'auto' }} onClick={() => approveUser(u.id)}>Approve</button>
+                      <button className="btn-ghost" style={{ width: 'auto' }} onClick={() => rejectUser(u.id)}>Reject</button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
             <p className="lede" style={{ fontSize: 13, margin: '16px 0 4px' }}>Everyone on the team</p>
-            {team.filter((u: any) => u.isActive).map((u: any) => (
+            {team.filter((u: any) => u.isActive && u.approved).map((u: any) => (
               <div key={u.id} className="lockbox" style={{ marginTop: 6 }}>
                 <div className="row">
                   <span className="label">{u.name}</span>

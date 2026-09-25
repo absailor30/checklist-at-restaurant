@@ -7,7 +7,7 @@ import { bandOf } from '@/lib/scoring';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { NotificationBell } from '@/components/notifications';
 
-type Step = 'outlet' | 'staff' | 'pin' | 'list';
+type Step = 'outlet' | 'staff' | 'pin' | 'list' | 'request' | 'requested';
 
 interface Outlet { id: string; name: string; org_id: string; timezone: string; station_count?: number }
 interface Staff { id: string; name: string; role: string; level: number; needsPin: boolean; shift?: string }
@@ -66,6 +66,10 @@ export default function StaffLineCheckPage() {
   const [me, setMe] = useState<{ name: string; role?: string } | null>(null);
   const [timezone, setTimezone] = useState('Asia/Kolkata');
   const [pin, setPin] = useState('');
+  const [reqName, setReqName] = useState('');
+  const [reqShift, setReqShift] = useState<'morning' | 'afternoon' | 'evening'>('morning');
+  const [reqPin, setReqPin] = useState('');
+  const [reqBusy, setReqBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadingOutlets, setLoadingOutlets] = useState(true);
@@ -164,6 +168,26 @@ export default function StaffLineCheckPage() {
       setStep('list');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function submitRequest() {
+    if (!outlet || reqName.trim().length < 2 || !/^\d{4,6}$/.test(reqPin)) return;
+    setReqBusy(true); setError(null);
+    try {
+      const res = await fetch('/api/l1/request-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outletId: outlet.id, name: reqName.trim(), shift: reqShift, pin: reqPin }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error); return; }
+      setReqName(''); setReqPin('');
+      setStep('requested');
+    } catch {
+      setError('The request did not complete.');
+    } finally {
+      setReqBusy(false);
     }
   }
 
@@ -358,10 +382,49 @@ export default function StaffLineCheckPage() {
           </button>
         ))}
         {staff.length === 0 && <p className="empty">No L1 managers set up for this outlet yet.</p>}
+        <button className="btn btn-ghost" style={{ marginTop: 16 }} onClick={() => { setError(null); setStep('request'); }}>
+          New here? Request access
+        </button>
         <a className="btn btn-ghost" href="/manager"
-          style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 16 }}>
+          style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 8 }}>
           Manager sign in
         </a>
+      </Screen>
+    );
+  }
+
+  if (step === 'request') {
+    return (
+      <Screen title="Request access" lede={outlet?.name} onBack={() => setStep('staff')}>
+        {error && <div className="banner error">{error}</div>}
+        <label htmlFor="reqName">Your name</label>
+        <input id="reqName" value={reqName} onChange={(e) => setReqName(e.target.value)} />
+        <label htmlFor="reqShift" style={{ marginTop: 12 }}>Your shift</label>
+        <div className="btn-row">
+          {(['morning', 'afternoon', 'evening'] as const).map((s) => (
+            <button key={s} className={reqShift === s ? 'btn-primary' : 'btn-ghost'} onClick={() => setReqShift(s)}>{s}</button>
+          ))}
+        </div>
+        <label htmlFor="reqPin" style={{ marginTop: 12 }}>Choose a 4-digit PIN</label>
+        <input id="reqPin" type="password" inputMode="numeric" value={reqPin} onChange={(e) => setReqPin(e.target.value)} />
+        <p className="lede" style={{ fontSize: 13 }}>
+          A manager needs to approve this before you can sign in — you'll see your name in the list once approved.
+        </p>
+        <button className="btn-primary" style={{ marginTop: 12 }}
+          disabled={reqBusy || reqName.trim().length < 2 || !/^\d{4,6}$/.test(reqPin)}
+          onClick={submitRequest}>
+          {reqBusy ? 'Sending…' : 'Send request'}
+        </button>
+      </Screen>
+    );
+  }
+
+  if (step === 'requested') {
+    return (
+      <Screen title="Request sent" lede="A manager will approve your access soon.">
+        <button className="btn-primary" style={{ marginTop: 12 }} onClick={() => setStep('staff')}>
+          Back to sign in
+        </button>
       </Screen>
     );
   }

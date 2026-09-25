@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const db = createAdminClient();
   const { data, error } = await db
     .from('user_outlets')
-    .select('users!inner(id, name, is_active, pin_set_at, shift, roles!inner(id, name, level))')
+    .select('users!inner(id, name, is_active, pin_set_at, shift, approved, roles!inner(id, name, level))')
     .eq('outlet_id', outletId);
   if (error) return json({ error: error.message }, { status: 500 });
 
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   // system that a stale org might still have lying around.
   const staff = (data ?? [])
     .map((r: any) => (Array.isArray(r.users) ? r.users[0] : r.users))
-    .filter((u: any) => u?.is_active)
+    .filter((u: any) => u?.is_active && u?.approved)
     .filter((u: any) => {
       const role = Array.isArray(u.roles) ? u.roles[0] : u.roles;
       return role?.level === 1;
@@ -58,12 +58,15 @@ export async function POST(request: Request) {
   const db = createAdminClient();
   const { data: user, error } = await db
     .from('users')
-    .select('id, org_id, name, role_id, pin_hash, pin_set_at, is_active, shift, roles!inner(level)')
+    .select('id, org_id, name, role_id, pin_hash, pin_set_at, is_active, approved, shift, roles!inner(level)')
     .eq('id', userId)
     .single();
 
   if (error || !user?.is_active) {
     return json({ error: 'Staff member not found.' }, { status: 404 });
+  }
+  if (!user.approved) {
+    return json({ error: 'Your access request is still waiting for approval.' }, { status: 403 });
   }
   const roleLevel = Array.isArray(user.roles) ? (user.roles[0] as any)?.level : (user.roles as any)?.level;
   if (roleLevel !== 1) {
