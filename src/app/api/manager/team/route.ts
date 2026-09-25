@@ -38,6 +38,7 @@ export async function POST(request: Request) {
   const manager = await currentManager();
   if (!manager) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
   if (!manager.canManage) return NextResponse.json({ error: 'L3 owner access required.' }, { status: 403 });
+  if (!manager.approved) return NextResponse.json({ error: 'Your own account is still waiting for approval.' }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const db = createAdminClient();
@@ -67,20 +68,34 @@ export async function POST(request: Request) {
   if (body.action === 'approve') {
     const { userId } = body;
     if (!userId) return NextResponse.json({ error: 'userId required.' }, { status: 400 });
-    const { data: target } = await db.from('users').select('org_id').eq('id', userId).maybeSingle();
+    const { data: target } = await db.from('users').select('org_id, roles(level)').eq('id', userId).maybeSingle();
     if (!target || target.org_id !== manager.orgId) return NextResponse.json({ error: 'User not found.' }, { status: 404 });
     await db.from('users').update({ approved: true }).eq('id', userId);
+
+    // A self-signed-up L2/L3 has no outlet yet — grant every outlet in the
+    // brand, same as one created during onboarding.
+    const level = Array.isArray(target.roles) ? (target.roles[0] as any)?.level : (target.roles as any)?.level;
+    if (level && level >= 2) {
+      const { data: existing } = await db.from('user_outlets').select('outlet_id').eq('user_id', userId);
+      if (!existing?.length) {
+        const { data: outlets } = await db.from('outlets').select('id').eq('org_id', manager.orgId);
+        if (outlets?.length) {
+          await db.from('user_outlets').insert(outlets.map((o) => ({ user_id: userId, outlet_id: o.id })));
+        }
+      }
+    }
     return NextResponse.json({ ok: true });
   }
 
   if (body.action === 'reject') {
     const { userId } = body;
     if (!userId) return NextResponse.json({ error: 'userId required.' }, { status: 400 });
-    const { data: target } = await db.from('users').select('org_id, approved').eq('id', userId).maybeSingle();
+    const { data: target } = await db.from('users').select('org_id, approved, auth_user_id').eq('id', userId).maybeSingle();
     if (!target || target.org_id !== manager.orgId) return NextResponse.json({ error: 'User not found.' }, { status: 404 });
     if (target.approved) return NextResponse.json({ error: 'Already approved — deactivate instead.' }, { status: 400 });
     await db.from('user_outlets').delete().eq('user_id', userId);
     await db.from('users').delete().eq('id', userId);
+    if (target.auth_user_id) await db.auth.admin.deleteUser(target.auth_user_id).catch(() => {});
     return NextResponse.json({ ok: true });
   }
 

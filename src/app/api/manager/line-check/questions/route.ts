@@ -11,10 +11,11 @@ export async function GET(request: Request) {
 
     const { data: profile } = await supabase
       .from('users')
-      .select('org_id, roles(name)')
+      .select('org_id, approved, roles(name)')
       .eq('auth_user_id', user.id)
       .single();
     if (!profile) return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
+    if (!profile.approved) return NextResponse.json({ error: 'Your account is still waiting for approval.' }, { status: 403 });
 
     const { searchParams } = new URL(request.url);
     const level = searchParams.get('level');
@@ -66,10 +67,11 @@ export async function POST(request: Request) {
 
     const { data: profile } = await supabase
       .from('users')
-      .select('org_id, roles(name)')
+      .select('org_id, approved, roles(name)')
       .eq('auth_user_id', user.id)
       .single();
     if (!profile) return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
+    if (!profile.approved) return NextResponse.json({ error: 'Your account is still waiting for approval.' }, { status: 403 });
 
     const roleName = Array.isArray(profile.roles) ? profile.roles[0]?.name : (profile.roles as any)?.name;
     const canManage = roleName === 'L3 Owner' || roleName === 'General Manager' || roleName === 'Owner';

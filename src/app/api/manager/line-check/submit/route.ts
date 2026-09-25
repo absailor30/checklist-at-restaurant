@@ -18,12 +18,15 @@ export async function POST(request: Request) {
 
     const { data: profile } = await supabase
       .from('users')
-      .select('org_id, roles(name)')
+      .select('org_id, approved, roles(name)')
       .eq('auth_user_id', user.id)
       .single();
 
     if (!profile) {
       return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
+    }
+    if (!profile.approved) {
+      return NextResponse.json({ error: 'Your account is still waiting for approval.' }, { status: 403 });
     }
 
     const form = await request.formData();

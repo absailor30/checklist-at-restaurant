@@ -31,7 +31,7 @@ export async function currentManager() {
 
   const { data } = await supabase
     .from('users')
-    .select('id, org_id, name, email, role_id, roles!inner(id, name, level, can_review, can_unlock, can_manage)')
+    .select('id, org_id, name, email, role_id, approved, roles!inner(id, name, level, can_review, can_unlock, can_manage)')
     .eq('auth_user_id', user.id)
     .maybeSingle();
   if (!data) return null;
@@ -41,6 +41,7 @@ export async function currentManager() {
     id: data.id, orgId: data.org_id, name: data.name, email: data.email,
     roleId: data.role_id, roleName: role.name, level: role.level,
     canReview: role.can_review, canUnlock: role.can_unlock, canManage: role.can_manage,
+    approved: data.approved,
   };
 }
 

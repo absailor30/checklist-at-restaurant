@@ -20,9 +20,17 @@ export default function ManagerDashboard() {
   const [password, setPassword] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [showSignup, setShowSignup] = useState(false);
+  const [sigBrand, setSigBrand] = useState('');
+  const [sigName, setSigName] = useState('');
+  const [sigEmail, setSigEmail] = useState('');
+  const [sigPassword, setSigPassword] = useState('');
+  const [sigBusy, setSigBusy] = useState(false);
+  const [sigMessage, setSigMessage] = useState('');
 
   const [outlets, setOutlets] = useState<any[]>([]);
   const [role, setRole] = useState<string | null>(null);
+  const [approved, setApproved] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -67,6 +75,7 @@ export default function ManagerDashboard() {
       const data = await res.json();
       setOutlets(data.outlets || []);
       setRole(data.role || null);
+      setApproved(data.approved !== false);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -267,6 +276,26 @@ export default function ManagerDashboard() {
     if (error) setLoginError(error.message);
   };
 
+  const submitSignup = async () => {
+    setSigBusy(true);
+    setSigMessage('');
+    try {
+      const res = await fetch('/api/manager/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandName: sigBrand, name: sigName, email: sigEmail, password: sigPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setSigMessage(data.error); return; }
+      setSigMessage('Request sent — an L3 owner needs to approve it before you can sign in.');
+      setSigBrand(''); setSigName(''); setSigEmail(''); setSigPassword('');
+    } catch {
+      setSigMessage('The request did not complete.');
+    } finally {
+      setSigBusy(false);
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
@@ -377,6 +406,31 @@ export default function ManagerDashboard() {
             {loginBusy ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+
+        <button className="btn btn-ghost" style={{ marginTop: 16 }} onClick={() => { setShowSignup((v) => !v); setSigMessage(''); }}>
+          New L2 manager? Request access
+        </button>
+        {showSignup && (
+          <div className="card" style={{ marginTop: 8 }}>
+            {sigMessage && <div className="banner info" style={{ marginBottom: 8 }}>{sigMessage}</div>}
+            <label htmlFor="sigBrand" style={{ marginTop: 0 }}>Brand name</label>
+            <input id="sigBrand" value={sigBrand} onChange={(e) => setSigBrand(e.target.value)} placeholder="Exact brand name" />
+            <label htmlFor="sigName">Your name</label>
+            <input id="sigName" value={sigName} onChange={(e) => setSigName(e.target.value)} />
+            <label htmlFor="sigEmail">Email</label>
+            <input id="sigEmail" type="email" value={sigEmail} onChange={(e) => setSigEmail(e.target.value)} />
+            <label htmlFor="sigPassword">Password</label>
+            <input id="sigPassword" type="password" value={sigPassword} onChange={(e) => setSigPassword(e.target.value)} placeholder="6+ characters" />
+            <button
+              className="btn-primary" style={{ marginTop: 12 }}
+              disabled={sigBusy || !sigBrand.trim() || sigName.trim().length < 2 || !sigEmail || sigPassword.length < 6}
+              onClick={submitSignup}
+            >
+              {sigBusy ? 'Sending…' : 'Send request'}
+            </button>
+          </div>
+        )}
+
         <a className="btn btn-ghost" href="/l1" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 16, lineHeight: '22px' }}>
           I'm an L1 manager
         </a>
@@ -386,6 +440,15 @@ export default function ManagerDashboard() {
 
   if (loading) return <div className="shell" style={{ paddingTop: 32 }}><div className="spinner" /></div>;
   if (error) return <div className="shell" style={{ paddingTop: 32 }}><div className="banner error">Error: {error}</div></div>;
+  if (!approved) {
+    return (
+      <div className="shell" style={{ paddingTop: 32 }}>
+        <h2>Waiting for approval</h2>
+        <p className="lede">Your account has been created but an L3 owner still needs to approve it before you can use the dashboard.</p>
+        <button className="btn-ghost" style={{ marginTop: 16 }} onClick={handleLogout}>Sign out</button>
+      </div>
+    );
+  }
 
   return (
     <>

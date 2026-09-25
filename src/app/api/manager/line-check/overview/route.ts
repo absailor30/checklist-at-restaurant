@@ -12,7 +12,7 @@ export async function GET(request: Request) {
 
     const { data: profile } = await supabase
       .from('users')
-      .select('org_id, roles(name)')
+      .select('org_id, approved, roles(name)')
       .eq('auth_user_id', user.id)
       .single();
 
@@ -21,6 +21,10 @@ export async function GET(request: Request) {
     }
 
     const roleName = Array.isArray(profile.roles) ? profile.roles[0]?.name : (profile.roles as any)?.name;
+
+    if (!profile.approved) {
+      return NextResponse.json({ outlets: [], role: roleName || null, approved: false });
+    }
 
     const { searchParams } = new URL(request.url);
     let dateStr = searchParams.get('date');
@@ -103,7 +107,7 @@ export async function GET(request: Request) {
       line_check_runs: runs?.filter((r: any) => r.outlet_id === outlet.id) || []
     }));
 
-    return NextResponse.json({ outlets: outletsWithRuns, role: roleName || null });
+    return NextResponse.json({ outlets: outletsWithRuns, role: roleName || null, approved: true });
   } catch (error: any) {
     console.error('Manager overview error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
