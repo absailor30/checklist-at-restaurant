@@ -31,6 +31,8 @@ export default function ManagerDashboard() {
 
   const [outlets, setOutlets] = useState<any[]>([]);
   const [role, setRole] = useState<string | null>(null);
+  const [myName, setMyName] = useState<string | null>(null);
+  const [myEmail, setMyEmail] = useState<string | null>(null);
   const [approved, setApproved] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -77,6 +79,8 @@ export default function ManagerDashboard() {
       const data = await res.json();
       setOutlets(data.outlets || []);
       setRole(data.role || null);
+      setMyName(data.name || null);
+      setMyEmail(data.email || null);
       setApproved(data.approved !== false);
     } catch (err: any) {
       setError(err.message);
@@ -457,7 +461,9 @@ export default function ManagerDashboard() {
       <div className="topbar">
         <div>
           <h1>Manager Dashboard</h1>
-          <div className="sub">Line Check Reviews</div>
+          <div className="sub">
+            {myName || myEmail || 'Signed in'}{role ? ` · ${role}` : ''}
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {canReviewL3 && (
