@@ -626,9 +626,6 @@ function QuestionCard({
       <div className="tag plain">Q{q.order}</div>
       <h2 style={{ marginTop: 10 }}>{q.prompt}</h2>
       {q.notes && <p className="lede">{q.notes}</p>}
-      {q.expected && q.kind !== 'numeric_photo' && (
-        <p className="lede">Expected: {q.expected}</p>
-      )}
 
       {q.kind === 'numeric_photo' && (
         <>
