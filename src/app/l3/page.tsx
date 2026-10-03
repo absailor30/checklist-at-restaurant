@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { L3Charts } from '@/components/l3-charts';
 
 interface Row {
   date: string; outletId: string; outletName: string; shift: string;
@@ -137,6 +138,8 @@ export default function L3ReportPage() {
             Export PDF
           </a>
         </div>
+
+        {!loading && report && <L3Charts rows={report.rows} />}
 
         {loading ? <div className="spinner" /> : (
           <div style={{ overflowX: 'auto' }}>
