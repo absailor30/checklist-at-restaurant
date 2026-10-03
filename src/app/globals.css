@@ -409,3 +409,16 @@ label { display: block; font-size: 14px; font-weight: 600; margin: 14px 0 6px; }
 .scorerow:last-child { border-bottom: none; }
 .scorenum { text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; }
 .scoremeta { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* Camera-only capture overlay (no gallery/upload picker) ------------------ */
+
+.camera-capture-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+.camera-capture-box {
+  background: var(--surface); border-radius: 12px; padding: 16px;
+  max-width: 480px; width: 100%;
+}

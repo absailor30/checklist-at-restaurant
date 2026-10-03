@@ -6,6 +6,7 @@ import { canAdvance, scoreAnswer, type LineCheckAnswer, type YesNoNa } from '@/l
 import { bandOf } from '@/lib/scoring';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { NotificationBell } from '@/components/notifications';
+import { CameraCapture } from '@/components/camera-capture';
 
 type Step = 'outlet' | 'staff' | 'pin' | 'list' | 'request' | 'requested';
 
@@ -739,40 +740,39 @@ function PhotoField({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [aiResult, setAiResult] = useState<{ verified: boolean | null; note: string | null } | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+
+  const handleCapture = async (file: File) => {
+    setCameraOpen(false);
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const preview = await fileToDataUrl(file);
+      const form = new FormData();
+      form.append('file', file);
+      form.append('questionId', questionId);
+      form.append('stationNo', stationNo.toString());
+      const res = await fetch('/api/l1/line-check/photo', { method: 'POST', body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Photo upload failed.');
+      setAiResult(data.aiVerified === null ? null : { verified: data.aiVerified, note: data.aiNote });
+      onUploaded(preview, data.photoPath, data.aiVerified ?? null, data.aiNote ?? null);
+    } catch (err: any) {
+      setUploadError(err.message || 'Photo upload failed.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <>
-      <label htmlFor="photo">Photo {required ? '(required)' : '(optional)'}</label>
-      <input
-        id="photo"
-        type="file"
-        accept="image/*"
-        capture="environment"
-        disabled={uploading}
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          setUploading(true);
-          setUploadError(null);
-          try {
-            const preview = await fileToDataUrl(file);
-            const form = new FormData();
-            form.append('file', file);
-            form.append('questionId', questionId);
-            form.append('stationNo', stationNo.toString());
-            const res = await fetch('/api/l1/line-check/photo', { method: 'POST', body: form });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || 'Photo upload failed.');
-            setAiResult(data.aiVerified === null ? null : { verified: data.aiVerified, note: data.aiNote });
-            onUploaded(preview, data.photoPath, data.aiVerified ?? null, data.aiNote ?? null);
-          } catch (err: any) {
-            setUploadError(err.message || 'Photo upload failed.');
-          } finally {
-            setUploading(false);
-            e.target.value = '';
-          }
-        }}
-      />
+      <label>Photo {required ? '(required)' : '(optional)'}</label>
+      <div>
+        <button type="button" className="btn-ghost" disabled={uploading} onClick={() => setCameraOpen(true)}>
+          {value ? 'Retake photo' : 'Take photo'}
+        </button>
+      </div>
+      {cameraOpen && <CameraCapture disabled={uploading} onCapture={handleCapture} onClose={() => setCameraOpen(false)} />}
       {uploading && <p className="lede">Uploading…</p>}
       {uploadError && <p className="lede" style={{ color: 'var(--locked)' }}>{uploadError}</p>}
       {value && <img className="preview" src={value} alt="Attached evidence" />}

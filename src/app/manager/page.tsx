@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { CameraCapture } from '@/components/camera-capture';
 
 const SHIFTS = [
   { id: 'morning', label: 'Morning shift' },
@@ -42,6 +43,7 @@ export default function ManagerDashboard() {
   const [photos, setPhotos] = useState<Record<string, File>>({});
   const [showComment, setShowComment] = useState<Set<string>>(new Set());
   const [showMedia, setShowMedia] = useState<Set<string>>(new Set());
+  const [cameraForQ, setCameraForQ] = useState<string | null>(null);
   const [qIndex, setQIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [actions, setActions] = useState<any[]>([]);
@@ -834,15 +836,15 @@ export default function ManagerDashboard() {
                       )}
                       {mediaOpen && (
                         <div style={{ marginTop: 12 }}>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) setPhotos(prev => ({ ...prev, [q.id]: file }));
-                            }}
-                          />
+                          <button type="button" className="btn-ghost" onClick={() => setCameraForQ(q.id)}>
+                            {photos[q.id] ? 'Retake photo' : 'Take photo'}
+                          </button>
+                          {cameraForQ === q.id && (
+                            <CameraCapture
+                              onCapture={(file) => { setPhotos(prev => ({ ...prev, [q.id]: file })); setCameraForQ(null); }}
+                              onClose={() => setCameraForQ(null)}
+                            />
+                          )}
                         </div>
                       )}
 
