@@ -4,7 +4,7 @@
 // false) when verification itself couldn't run, so callers can tell "AI
 // said no" apart from "AI never ran."
 
-const GROQ_MODEL = process.env.GROQ_VISION_MODEL || 'llama-3.2-11b-vision-preview';
+const GROQ_MODEL = process.env.GROQ_VISION_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct';
 
 export interface PhotoVerification {
   verified: boolean;
