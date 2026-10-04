@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { CameraCapture } from '@/components/camera-capture';
+import { formatCheckTime } from '@/lib/line-check/time';
 
 const SHIFTS = [
   { id: 'morning', label: 'Morning shift' },
@@ -32,6 +33,7 @@ export default function ManagerDashboard() {
   const [outlets, setOutlets] = useState<any[]>([]);
   const [role, setRole] = useState<string | null>(null);
   const [stationNames, setStationNames] = useState<string[]>([]);
+  const [shiftLabels, setShiftLabels] = useState<Record<string, string>>({});
   const [hardStop, setHardStop] = useState<string | null>('12:00');
   const [myName, setMyName] = useState<string | null>(null);
   const [myEmail, setMyEmail] = useState<string | null>(null);
@@ -82,6 +84,7 @@ export default function ManagerDashboard() {
       setOutlets(data.outlets || []);
       setRole(data.role || null);
       setStationNames(data.stationNames || []);
+      setShiftLabels(data.shiftLabels || {});
       setHardStop(data.hardStop === undefined ? '12:00' : data.hardStop);
       setMyName(data.name || null);
       setMyEmail(data.email || null);
@@ -515,7 +518,7 @@ export default function ManagerDashboard() {
             <div className="btn-row" style={{ marginTop: 6 }}>
               {(['morning', 'afternoon', 'evening'] as const).map((s) => (
                 <button key={s} className={newL1Shift === s ? 'btn-primary' : 'btn-ghost'} onClick={() => setNewL1Shift(s)}>
-                  {s}
+                  {shiftLabels[s] ?? s}
                 </button>
               ))}
             </div>
@@ -662,7 +665,7 @@ export default function ManagerDashboard() {
 
                 return (
                 <div key={shift} style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-                  <div className="desc" style={{ fontWeight: 600 }}>{label}</div>
+                  <div className="desc" style={{ fontWeight: 600 }}>{shiftLabels[shift] ?? label}{run?.check_time ? ` · ${formatCheckTime(run.check_time)}` : ''}</div>
                   {!run ? (
                     <div className="desc">Not started yet.</div>
                   ) : (
@@ -820,7 +823,7 @@ export default function ManagerDashboard() {
                           className={commentOpen ? 'btn-primary' : 'btn-ghost'}
                           onClick={() => setShowComment(prev => new Set(prev).add(q.id))}
                         >
-                          💬 Comment
+                          💬 Comments / Corrective actions
                         </button>
                         <button
                           type="button"
@@ -843,7 +846,7 @@ export default function ManagerDashboard() {
                           style={{ marginTop: 12 }}
                           value={a.reason ?? ''}
                           onChange={(e) => setA({ reason: e.target.value })}
-                          placeholder="Comment"
+                          placeholder="Comments / Corrective actions (if applicable)"
                         />
                       )}
                       {mediaOpen && (

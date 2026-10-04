@@ -13,11 +13,17 @@ export interface Bank {
   hardStop: string | null;
   /** True when the brand defined its own L1 questions rather than using the global default. */
   own: boolean;
+  /** Brand names for the three shift slots, e.g. morning -> "Opening". Empty = default names. */
+  shiftLabels: Record<string, string>;
+  /** Whether L1 picks the time the check is done (15-minute steps). */
+  askCheckTime: boolean;
 }
 
 interface OrgConfig {
   stationNames?: string[];
   hardStop?: string;
+  shiftLabels?: Partial<Record<'morning' | 'afternoon' | 'evening', string>>;
+  askCheckTime?: boolean;
 }
 
 export function hardStopOf(config: OrgConfig | null | undefined): string | null {
@@ -39,6 +45,7 @@ function toQuestion(r: any): LineCheckQuestion {
     photoRequired: Boolean(r.photo_required),
     reasonOnNo: Boolean(r.reason_on_no),
     notes: r.notes ?? undefined,
+    yesLabel: r.yes_label ?? undefined,
   };
 }
 
@@ -51,7 +58,7 @@ export async function loadBank(db: SupabaseClient, orgId: string, stationCount: 
   const [{ data: org }, { data: rows }] = await Promise.all([
     db.from('organisations').select('line_check_config').eq('id', orgId).maybeSingle(),
     db.from('line_check_questions')
-      .select('id, sort_order, kind, prompt, expected, unit, min_value, max_value, photo_required, reason_on_no, notes, station_no')
+      .select('id, sort_order, kind, prompt, expected, unit, min_value, max_value, photo_required, reason_on_no, notes, station_no, yes_label')
       .eq('level', 'L1')
       .eq('org_id', orgId)
       .not('station_no', 'is', null)
@@ -73,7 +80,7 @@ export async function loadBank(db: SupabaseClient, orgId: string, stationCount: 
     const stations = [...byStation.entries()]
       .sort(([a], [b]) => a - b)
       .map(([no, questions]) => ({ no, name: names[no - 1] || `Station ${no}`, questions }));
-    return { stations, hardStop, own: true };
+    return { stations, hardStop, own: true, shiftLabels: config.shiftLabels ?? {}, askCheckTime: Boolean(config.askCheckTime) };
   }
 
   const count = Math.max(1, stationCount);
@@ -82,7 +89,7 @@ export async function loadBank(db: SupabaseClient, orgId: string, stationCount: 
     name: names[i] || `Station ${i + 1}`,
     questions: L1_QUESTIONS,
   }));
-  return { stations, hardStop, own: false };
+  return { stations, hardStop, own: false, shiftLabels: config.shiftLabels ?? {}, askCheckTime: Boolean(config.askCheckTime) };
 }
 
 export function findQuestion(bank: Bank, questionId: string): LineCheckQuestion | undefined {

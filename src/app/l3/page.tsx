@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { L3Charts } from '@/components/l3-charts';
 
 interface Row {
-  date: string; outletId: string; outletName: string; shift: string;
+  date: string; outletId: string; outletName: string; shift: string; checkTime: string | null;
   stationsComplete: number; stationCount: number; l1Complete: boolean;
   percent: number | null; band: string | null; onTime: boolean | null;
   l2Complete: boolean; l3Complete: boolean;
@@ -156,7 +156,7 @@ export default function L3ReportPage() {
                   <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '6px 8px' }}>{r.date}</td>
                     <td style={{ padding: '6px 8px' }}>{r.outletName}</td>
-                    <td style={{ padding: '6px 8px', textTransform: 'capitalize' }}>{r.shift}</td>
+                    <td style={{ padding: '6px 8px', textTransform: 'capitalize' }}>{r.shift}{r.checkTime ? ` · ${r.checkTime}` : ''}</td>
                     <td style={{ padding: '6px 8px' }}>{r.stationsComplete}/{r.stationCount}</td>
                     <td style={{ padding: '6px 8px' }}>{r.percent ?? '—'}</td>
                     <td style={{ padding: '6px 8px' }}>{r.band ?? '—'}</td>

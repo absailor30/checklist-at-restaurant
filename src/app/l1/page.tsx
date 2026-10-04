@@ -11,7 +11,7 @@ import { CameraCapture } from '@/components/camera-capture';
 
 type Step = 'outlet' | 'staff' | 'pin' | 'list' | 'request' | 'requested';
 
-interface Outlet { id: string; name: string; org_id: string; timezone: string; station_count?: number }
+interface Outlet { id: string; name: string; org_id: string; timezone: string; station_count?: number; shift_labels?: Record<string, string> | null }
 interface Staff { id: string; name: string; role: string; level: number; needsPin: boolean; shift?: string }
 
 type StationStatus = 'idle' | 'in_progress' | 'paused' | 'complete';
@@ -58,6 +58,19 @@ function stationScore(answers: Record<string, LineCheckAnswer>, questions: LineC
 
 const OUTLET_KEY = 'checklist.outletId';
 
+// Time of the check, in 15-minute steps across the whole day ("10:15 AM").
+const TIME_OPTIONS = Array.from({ length: 96 }, (_, i) => {
+  const h = Math.floor(i / 4);
+  const m = (i % 4) * 15;
+  const label = `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+  return { value: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`, label };
+});
+
+// Typical time each shift does the check; only a starting suggestion.
+function defaultCheckTime(shift?: string) {
+  return shift === 'afternoon' ? '16:00' : shift === 'evening' ? '22:00' : '10:00';
+}
+
 function draftKey(outletId: string, personId: string) {
   const day = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   return `checklist.linecheck.draft.${outletId}.${personId}.${day}`;
@@ -83,6 +96,7 @@ export default function StaffLineCheckPage() {
 
   // Line Check state
   const [bank, setBank] = useState<Bank | null>(null);
+  const [checkTime, setCheckTime] = useState('10:00');
   const [stations, setStations] = useState<Record<number, StationState>>({});
   const [active, setActive] = useState<number | null>(null);
   const [pauseDraft, setPauseDraft] = useState('');
@@ -174,6 +188,9 @@ export default function StaffLineCheckPage() {
         if (saved) restored = JSON.parse(saved);
       } catch { /* corrupt or missing draft, start fresh */ }
       setStations({ ...emptyStations(loaded), ...restored });
+      let savedTime: string | null = null;
+      try { savedTime = localStorage.getItem(`${draftKey(outlet.id, person.id)}.time`); } catch { /* ignore */ }
+      setCheckTime(savedTime || defaultCheckTime(person.shift));
       setMe({ name: person.name, role: person.role });
       setStep('list');
     } finally {
@@ -241,7 +258,10 @@ export default function StaffLineCheckPage() {
     try {
       localStorage.setItem(draftKey(outlet.id, person.id), JSON.stringify(stations));
     } catch { /* storage full or unavailable, nothing we can do */ }
-  }, [stations, step, outlet, person]);
+    try {
+      localStorage.setItem(`${draftKey(outlet.id, person.id)}.time`, checkTime);
+    } catch { /* ignore */ }
+  }, [stations, step, outlet, person, checkTime]);
 
   function openStation(id: number) {
     setError(null);
@@ -257,6 +277,7 @@ export default function StaffLineCheckPage() {
     const form = new FormData();
     form.append('stationNo', id.toString());
     form.append('status', status);
+    if (bank?.askCheckTime && checkTime) form.append('checkTime', checkTime);
     if (pReason) form.append('pauseReason', pReason);
 
     // Photos are uploaded immediately on capture (see PhotoField), so this
@@ -415,7 +436,7 @@ export default function StaffLineCheckPage() {
         <label htmlFor="reqShift" style={{ marginTop: 12 }}>Your shift</label>
         <div className="btn-row">
           {(['morning', 'afternoon', 'evening'] as const).map((s) => (
-            <button key={s} className={reqShift === s ? 'btn-primary' : 'btn-ghost'} onClick={() => setReqShift(s)}>{s}</button>
+            <button key={s} className={reqShift === s ? 'btn-primary' : 'btn-ghost'} onClick={() => setReqShift(s)}>{outlet?.shift_labels?.[s] ?? s}</button>
           ))}
         </div>
         <label htmlFor="reqPin" style={{ marginTop: 12 }}>Choose a 4-digit PIN</label>
@@ -569,6 +590,15 @@ export default function StaffLineCheckPage() {
           {overall.band !== '—' ? ` · ${overall.band}` : ''}.
         </p>
 
+        {bank?.askCheckTime && (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <label htmlFor="checkTime" style={{ marginTop: 0 }}>Time of this check</label>
+            <select id="checkTime" value={checkTime} onChange={(e) => setCheckTime(e.target.value)}>
+              {TIME_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+        )}
+
         {activeStations.map((s) => {
           const st = stations[s.no] ?? emptyStation();
           const sc = stationScore(st.answers, s.questions);
@@ -636,7 +666,7 @@ function QuestionCard({
   const [showMedia, setShowMedia] = useState(false);
 
   const commentRequired = needsReason(q, a);
-  const mediaRequired = needsPhoto(q, a) || q.kind === 'numeric_photo';
+  const mediaRequired = needsPhoto(q, a) || q.kind === 'numeric_photo' || (q.kind === 'numeric' && a?.yesNo !== 'na');
   const commentOpen = showComment || commentRequired || Boolean(a?.reason);
   const mediaOpen = showMedia || mediaRequired || Boolean(a?.photoDataUrl);
 
@@ -678,7 +708,7 @@ function QuestionCard({
       {q.kind !== 'numeric_photo' && q.kind !== 'numeric' && (
         <div className="btn-row" style={{ marginTop: 12 }}>
           <button className={a?.yesNo === 'yes' ? 'btn-primary' : 'btn-ghost'} onClick={() => yesNo('yes')}>
-            Yes
+            {q.yesLabel ?? 'Yes'}
           </button>
           <button className={a?.yesNo === 'no' ? 'btn-primary' : 'btn-ghost'} onClick={() => yesNo('no')}>
             No
@@ -695,9 +725,9 @@ function QuestionCard({
           className={commentOpen ? 'btn-primary' : 'btn-ghost'}
           onClick={() => setShowComment((v) => !v)}
           aria-pressed={commentOpen}
-          title="Comment"
+          title="Comments / Corrective actions"
         >
-          💬 Comment{commentRequired ? ' *' : ''}
+          💬 Comments / Corrective actions{commentRequired ? ' *' : ''}
         </button>
         <button
           type="button"
@@ -721,7 +751,7 @@ function QuestionCard({
 
       {commentOpen && (
         <>
-          <label htmlFor="reason">Comment {commentRequired ? '(required)' : '(optional)'}</label>
+          <label htmlFor="reason">Comments / Corrective actions {commentRequired ? '(required)' : '(if applicable)'}</label>
           <textarea
             id="reason"
             value={a?.reason ?? ''}

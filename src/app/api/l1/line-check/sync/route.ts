@@ -15,6 +15,8 @@ export async function POST(request: Request) {
   const status = form.get('status') as string;
   const pauseReason = form.get('pauseReason') as string | null;
   const answersJson = form.get('answers') as string;
+  const checkTimeRaw = form.get('checkTime');
+  const checkTime = typeof checkTimeRaw === 'string' && /^[0-2][0-9]:[0-5][0-9]$/.test(checkTimeRaw) ? checkTimeRaw : null;
 
   if (!Number.isInteger(stationNo) || stationNo < 1 || stationNo > 30) {
     return json({ error: 'Invalid station number.' }, { status: 400 });
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
   // Upsert the run
   const { data: run, error: runError } = await db
     .from('line_check_runs')
-    .upsert({ outlet_id: session.outletId, run_date: runDate, shift }, { onConflict: 'outlet_id, run_date, shift' })
+    .upsert({ outlet_id: session.outletId, run_date: runDate, shift, ...(checkTime ? { check_time: checkTime } : {}) }, { onConflict: 'outlet_id, run_date, shift' })
     .select('id')
     .single();
 

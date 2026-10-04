@@ -21,7 +21,14 @@ export async function GET() {
   // possible if it was written before the column existed, or by a path that
   // omitted it — would be excluded by `.eq('is_active', true)` and the outlet
   // would silently vanish from the picker. Only an explicit false hides it.
-  const outlets = (data ?? []).filter((o) => o.is_active !== false);
+  const visible = (data ?? []).filter((o) => o.is_active !== false);
+
+  // A brand may rename the three shift slots (e.g. Opening / Mid Shift / Closing).
+  // Read separately so a problem here can never hide the outlet list.
+  const orgIds = [...new Set(visible.map((o) => o.org_id))];
+  const { data: orgs } = await db.from('organisations').select('id, line_check_config').in('id', orgIds);
+  const labelsByOrg = new Map((orgs ?? []).map((o: any) => [o.id, o.line_check_config?.shiftLabels ?? null]));
+  const outlets = visible.map((o) => ({ ...o, shift_labels: labelsByOrg.get(o.org_id) ?? null }));
 
   // serverTime proves the response is fresh rather than a cached copy.
   return json({

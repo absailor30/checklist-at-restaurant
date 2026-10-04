@@ -24,8 +24,7 @@ export function inRange(q: LineCheckQuestion, value: number): boolean {
 
 export function evidenceOk(q: LineCheckQuestion, a: LineCheckAnswer | undefined): boolean {
   if (!a) return false;
-  if (q.kind === 'numeric') return true;
-  if (q.kind === 'numeric_photo') return Boolean(a.photoDataUrl);
+  if (q.kind === 'numeric' || q.kind === 'numeric_photo') return Boolean(a.photoDataUrl);
   if (q.kind === 'yes_no_photo_always') return Boolean(a.photoDataUrl);
   if (q.kind === 'yes_no_photo_on_no') {
     if (a.yesNo === 'no') return Boolean(a.photoDataUrl);
@@ -67,7 +66,7 @@ export function canAdvance(q: LineCheckQuestion, a: LineCheckAnswer | undefined)
   if (!a) return false;
   if (q.kind === 'numeric') {
     if (a.yesNo === 'na') return true;
-    return a.value !== null && a.value !== undefined && !Number.isNaN(a.value);
+    return a.value !== null && a.value !== undefined && !Number.isNaN(a.value) && Boolean(a.photoDataUrl);
   }
   if (q.kind === 'numeric_photo') {
     return a.value !== null && a.value !== undefined && !Number.isNaN(a.value) && Boolean(a.photoDataUrl);

@@ -11,6 +11,7 @@ export interface ImportedQuestion {
   min: number | null;
   max: number | null;
   notes: string | null;
+  yesLabel: string | null;
 }
 
 export interface ImportedStation {
@@ -73,6 +74,8 @@ export function parseBakeryLineCheck(buffer: Buffer | ArrayBuffer): ImportedStat
       min: range ? range.min : null,
       max: range ? range.max : null,
       notes: parts.join(' · ') || null,
+      // Ambient storage rows read "Yes (Ambient, cool)" so the staff member confirms the condition, not just "yes".
+      yesLabel: !range && /^ambien/i.test(required) ? 'Yes (Ambient, cool)' : null,
     });
   }
   return stations.filter((s) => s.questions.length > 0);
@@ -90,22 +93,22 @@ export function bankToSql(orgName: string, stations: ImportedStation[], slug: st
   out.push(`  select id into v_org from organisations where name = ${sqlStr(orgName)};`);
   out.push(`  if v_org is null then raise exception 'Organisation % not found', ${sqlStr(orgName)}; end if;`);
   out.push(`  update organisations set line_check_config = coalesce(line_check_config, '{}'::jsonb)`);
-  out.push(`    || jsonb_build_object('stationNames', '${names.replace(/'/g, "''")}'::jsonb, 'hardStop', 'none') where id = v_org;`);
+  out.push(`    || jsonb_build_object('stationNames', '${names.replace(/'/g, "''")}'::jsonb, 'hardStop', 'none', 'askCheckTime', true, 'shiftLabels', jsonb_build_object('morning', 'Opening', 'afternoon', 'Mid Shift', 'evening', 'Closing')) where id = v_org;`);
   out.push(`  update outlets set station_count = ${stations.length} where org_id = v_org;`);
-  out.push(`  insert into line_check_questions (id, level, sort_order, kind, prompt, expected, unit, min_value, max_value, photo_required, reason_on_no, notes, org_id, station_no) values`);
+  out.push(`  insert into line_check_questions (id, level, sort_order, kind, prompt, expected, unit, min_value, max_value, photo_required, reason_on_no, notes, org_id, station_no, yes_label) values`);
   const vals: string[] = [];
   stations.forEach((st, si) => {
     st.questions.forEach((q, qi) => {
       const id = `${slug}-s${si + 1}-q${qi + 1}`;
       vals.push(
-        `    (${sqlStr(id)}, 'L1', ${qi + 1}, ${sqlStr(q.kind)}, ${sqlStr(q.prompt)}, ${q.kind === 'yes_no' ? "'yes'" : 'null'}, ${sqlStr(q.unit)}, ${sqlNum(q.min)}, ${sqlNum(q.max)}, false, false, ${sqlStr(q.notes)}, v_org, ${si + 1})`
+        `    (${sqlStr(id)}, 'L1', ${qi + 1}, ${sqlStr(q.kind)}, ${sqlStr(q.prompt)}, ${q.kind === 'yes_no' ? "'yes'" : 'null'}, ${sqlStr(q.unit)}, ${sqlNum(q.min)}, ${sqlNum(q.max)}, ${q.kind === 'numeric'}, false, ${sqlStr(q.notes)}, v_org, ${si + 1}, ${sqlStr(q.yesLabel)})`
       );
     });
   });
   out.push(vals.join(',\n'));
   out.push(`  on conflict (id) do update set sort_order = excluded.sort_order, kind = excluded.kind, prompt = excluded.prompt,`);
   out.push(`    expected = excluded.expected, unit = excluded.unit, min_value = excluded.min_value, max_value = excluded.max_value,`);
-  out.push(`    notes = excluded.notes, station_no = excluded.station_no;`);
+  out.push(`    notes = excluded.notes, station_no = excluded.station_no, yes_label = excluded.yes_label, photo_required = excluded.photo_required;`);
   out.push(`end $$;`);
   return out.join('\n') + '\n';
 }

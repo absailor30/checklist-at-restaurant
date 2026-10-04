@@ -26,6 +26,8 @@ export interface LineCheckQuestion {
   photoRequired: boolean;
   reasonOnNo: boolean;
   notes?: string;
+  /** Overrides the label of the Yes button, e.g. "Yes (Ambient, cool)". The stored answer is still 'yes'. */
+  yesLabel?: string;
 }
 
 export const STATIONS = [

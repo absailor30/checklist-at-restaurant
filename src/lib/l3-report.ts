@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Manager } from '@/lib/supabase/server';
 import { loadBank } from '@/lib/line-check/bank';
+import { formatCheckTime } from '@/lib/line-check/time';
 import { scoreAnswer, type LineCheckAnswer } from '@/lib/line-check/score-answer';
 import { bandOf } from '@/lib/scoring';
 
@@ -8,7 +9,7 @@ import { bandOf } from '@/lib/scoring';
 // still pending, over a date range. Built on the line_check_* tables.
 
 export interface L3ReportRow {
-  date: string; outletId: string; outletName: string; shift: string;
+  date: string; outletId: string; outletName: string; shift: string; checkTime: string | null;
   stationsComplete: number; stationCount: number; l1Complete: boolean;
   percent: number | null; band: string | null; onTime: boolean | null;
   l2Complete: boolean; l3Complete: boolean;
@@ -51,7 +52,7 @@ export async function buildL3Report(
   const { data: runs, error } = await db
     .from('line_check_runs')
     .select(`
-      id, outlet_id, run_date, shift, l2_completed_at, l3_completed_at,
+      id, outlet_id, run_date, shift, check_time, l2_completed_at, l3_completed_at,
       line_check_stations (
         station_no, status, completed_at,
         line_check_answers ( question_id, yes_no, value_number, photo_path, reason )
@@ -100,7 +101,8 @@ export async function buildL3Report(
       date: r.run_date,
       outletId: r.outlet_id,
       outletName: outlet?.name ?? '',
-      shift: r.shift,
+      shift: bank.shiftLabels[r.shift] ?? r.shift,
+      checkTime: formatCheckTime(r.check_time),
       stationsComplete: completed.length,
       stationCount,
       l1Complete: completed.length === stationCount,
