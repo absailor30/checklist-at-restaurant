@@ -7,6 +7,9 @@ export interface LineCheckAnswer {
   yesNo?: YesNoNa;
   value?: number | null;
   photoDataUrl?: string | null;
+  /** Optional second photo, taken after the corrective action. */
+  correctionPhotoDataUrl?: string | null;
+  correctionPhotoPath?: string | null;
   /** Storage path once the photo has actually been uploaded. */
   photoPath?: string | null;
   reason?: string | null;
@@ -20,6 +23,22 @@ export function inRange(q: LineCheckQuestion, value: number): boolean {
   if (q.min !== undefined && value < q.min) return false;
   if (q.max !== undefined && value > q.max) return false;
   return true;
+}
+
+/** "at or below 5°C", "between 0 and 5°C", "at least 90°C". */
+export function describeRange(q: LineCheckQuestion): string {
+  const u = q.unit ?? '';
+  if (q.min !== undefined && q.max !== undefined) return `between ${q.min} and ${q.max}${u}`;
+  if (q.max !== undefined) return `at or below ${q.max}${u}`;
+  if (q.min !== undefined) return `at least ${q.min}${u}`;
+  return 'the acceptable range';
+}
+
+/** A 'numeric' reading that is outside the question's acceptable range (and not N/A). */
+export function isOutOfRange(q: LineCheckQuestion, a: LineCheckAnswer | undefined): boolean {
+  if (q.kind !== 'numeric' || !a || a.yesNo === 'na') return false;
+  if (a.value === null || a.value === undefined || Number.isNaN(a.value)) return false;
+  return !inRange(q, a.value);
 }
 
 export function evidenceOk(q: LineCheckQuestion, a: LineCheckAnswer | undefined): boolean {
@@ -66,7 +85,8 @@ export function canAdvance(q: LineCheckQuestion, a: LineCheckAnswer | undefined)
   if (!a) return false;
   if (q.kind === 'numeric') {
     if (a.yesNo === 'na') return true;
-    return a.value !== null && a.value !== undefined && !Number.isNaN(a.value) && Boolean(a.photoDataUrl);
+    return a.value !== null && a.value !== undefined && !Number.isNaN(a.value) && Boolean(a.photoDataUrl)
+      && (!isOutOfRange(q, a) || Boolean(a.reason?.trim()));
   }
   if (q.kind === 'numeric_photo') {
     return a.value !== null && a.value !== undefined && !Number.isNaN(a.value) && Boolean(a.photoDataUrl);

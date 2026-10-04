@@ -11,6 +11,10 @@ export interface ImportedQuestion {
   min: number | null;
   max: number | null;
   notes: string | null;
+  /** The part of notes before the (often repeated, long) Product Standard text. */
+  notesHead: string;
+  /** The Product Standard text on its own; stored once per distinct text in the seed SQL. */
+  standard: string | null;
   yesLabel: string | null;
 }
 
@@ -26,11 +30,36 @@ function titleCase(s: string) {
   return s.toLowerCase().replace(/(^|[\s(/-])([a-z])/g, (_, a, b) => a + b.toUpperCase());
 }
 
-// Only a real range like "0–5°C" or "Brew water 90–96°C" becomes a numeric
-// reading; "Ambient", "As per SOP", "N/A" are checked as pass/fail instead.
-function parseRange(required: string): { min: number; max: number } | null {
-  const m = required.match(/(-?\d+(?:\.\d+)?)\s*[–—-]\s*(-?\d+(?:\.\d+)?)\s*°\s*C/i);
-  return m ? { min: Number(m[1]), max: Number(m[2]) } : null;
+const norm = (t: string) => t.replace(/[\u2212\u2013\u2014]/g, '-');
+
+// Acceptable limits from the Required Temp and Product Standard columns together,
+// always taking the strictest value mentioned:
+//  - cold items: the lowest upper limit ("0-5C" and "<=5C" -> 5; "<=-5C" beats both -> -5)
+//  - hot items (any figure >= 50C): the lowest figure mentioned is the minimum
+// Rows that mention no temperature ("Ambient", "As per SOP") return null and are
+// checked as pass/fail instead.
+function parseLimits(required: string, standard: string): { min?: number; max?: number } | null {
+  const text = norm(`${required} ${standard}`);
+  const values: number[] = [];
+  const uppers: number[] = [];
+  let rangeLo: number | null = null;
+
+  const rangeRe = /(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)\s*\u00b0\s*C/gi;
+  const leRe = /\u2264\s*(-?\d+(?:\.\d+)?)\s*\u00b0\s*C/gi;
+  for (const m of text.matchAll(rangeRe)) {
+    const lo = Number(m[1]); const hi = Number(m[2]);
+    values.push(lo, hi); uppers.push(hi);
+    if (rangeLo === null) rangeLo = lo;
+  }
+  for (const m of text.matchAll(leRe)) { values.push(Number(m[1])); uppers.push(Number(m[1])); }
+  const rest = text.replace(rangeRe, ' ').replace(leRe, ' ');
+  for (const m of rest.matchAll(/(-?\d+(?:\.\d+)?)\s*\u00b0\s*C/gi)) values.push(Number(m[1]));
+
+  if (values.length === 0) return null;
+  if (values.some((v) => v >= 50)) return { min: Math.min(...values) };
+
+  const max = Math.min(...uppers);
+  return { max, ...(rangeLo !== null && rangeLo <= max ? { min: rangeLo } : {}) };
 }
 
 export function parseBakeryLineCheck(buffer: Buffer | ArrayBuffer): ImportedStation[] {
@@ -60,20 +89,22 @@ export function parseBakeryLineCheck(buffer: Buffer | ArrayBuffer): ImportedStat
     const station = stations[stations.length - 1];
     if (!station) continue;
 
-    const range = parseRange(required);
-    const parts = [
+    const range = parseLimits(required, standard);
+    const head = [
       required && `Required: ${required}`,
       shelf && shelf !== 'N/A' && `Shelf life: ${shelf}`,
-      standard && `Standard: ${standard}`,
     ].filter(Boolean) as string[];
+    const parts = [...head, ...(standard ? [`Standard: ${standard}`] : [])];
 
     station.questions.push({
       prompt: range ? `${name} — temperature` : `${name} — meets standard?`,
       kind: range ? 'numeric' : 'yes_no',
       unit: range ? '°C' : null,
-      min: range ? range.min : null,
-      max: range ? range.max : null,
+      min: range?.min ?? null,
+      max: range?.max ?? null,
       notes: parts.join(' · ') || null,
+      notesHead: head.join(' · '),
+      standard: standard || null,
       // Ambient storage rows read "Yes (Ambient, cool)" so the staff member confirms the condition, not just "yes".
       yesLabel: !range && /^ambien/i.test(required) ? 'Yes (Ambient, cool)' : null,
     });
@@ -89,7 +120,10 @@ export function bankToSql(orgName: string, stations: ImportedStation[], slug: st
   const names = JSON.stringify(stations.map((s) => s.name));
   const out: string[] = [];
   out.push(`-- L1 bank for "${orgName}": ${stations.length} stations, ${stations.reduce((n, s) => n + s.questions.length, 0)} questions.`);
-  out.push(`do $$ declare v_org uuid; begin`);
+  const stds = [...new Set(stations.flatMap((st) => st.questions.map((q) => q.standard)).filter((x): x is string => Boolean(x)))];
+  out.push(`do $$ declare v_org uuid; std text[] := array[`);
+  out.push(stds.map((x) => `    ${sqlStr(x)}`).join(',\n'));
+  out.push(`  ]; begin`);
   out.push(`  select id into v_org from organisations where name = ${sqlStr(orgName)};`);
   out.push(`  if v_org is null then raise exception 'Organisation % not found', ${sqlStr(orgName)}; end if;`);
   out.push(`  update organisations set line_check_config = coalesce(line_check_config, '{}'::jsonb)`);
@@ -100,8 +134,11 @@ export function bankToSql(orgName: string, stations: ImportedStation[], slug: st
   stations.forEach((st, si) => {
     st.questions.forEach((q, qi) => {
       const id = `${slug}-s${si + 1}-q${qi + 1}`;
+      const notes = q.standard
+        ? `${sqlStr(q.notesHead ? `${q.notesHead} · Standard: ` : 'Standard: ')} || std[${stds.indexOf(q.standard) + 1}]`
+        : sqlStr(q.notes);
       vals.push(
-        `    (${sqlStr(id)}, 'L1', ${qi + 1}, ${sqlStr(q.kind)}, ${sqlStr(q.prompt)}, ${q.kind === 'yes_no' ? "'yes'" : 'null'}, ${sqlStr(q.unit)}, ${sqlNum(q.min)}, ${sqlNum(q.max)}, ${q.kind === 'numeric'}, false, ${sqlStr(q.notes)}, v_org, ${si + 1}, ${sqlStr(q.yesLabel)})`
+        `    (${sqlStr(id)}, 'L1', ${qi + 1}, ${sqlStr(q.kind)}, ${sqlStr(q.prompt)}, ${q.kind === 'yes_no' ? "'yes'" : 'null'}, ${sqlStr(q.unit)}, ${sqlNum(q.min)}, ${sqlNum(q.max)}, ${q.kind === 'numeric'}, false, ${notes}, v_org, ${si + 1}, ${sqlStr(q.yesLabel)})`
       );
     });
   });

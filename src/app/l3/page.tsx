@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { L3Charts } from '@/components/l3-charts';
+import { loginEmail } from '@/lib/login-id';
 
 interface Row {
   date: string; outletId: string; outletName: string; shift: string; checkTime: string | null;
-  stationsComplete: number; stationCount: number; l1Complete: boolean;
+  stationsComplete: number; stationCount: number; l1Complete: boolean; outOfRange: number;
   percent: number | null; band: string | null; onTime: boolean | null;
   l2Complete: boolean; l3Complete: boolean;
 }
@@ -63,7 +64,7 @@ export default function L3ReportPage() {
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoginBusy(true); setLoginError('');
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail(email), password });
     setLoginBusy(false);
     if (error) setLoginError(error.message);
   }
@@ -84,8 +85,8 @@ export default function L3ReportPage() {
         <p className="lede">Same account as the manager dashboard.</p>
         {loginError && <div className="banner error">{loginError}</div>}
         <form className="card" onSubmit={handleLogin}>
-          <label htmlFor="email" style={{ marginTop: 0 }}>Email</label>
-          <input id="email" type="email" value={email} autoComplete="username"
+          <label htmlFor="email" style={{ marginTop: 0 }}>Email or username</label>
+          <input id="email" type="text" autoCapitalize="none" autoCorrect="off" value={email} autoComplete="username"
             onChange={(e) => setEmail(e.target.value)} required />
           <label htmlFor="password">Password</label>
           <input id="password" type="password" value={password} autoComplete="current-password"
@@ -146,7 +147,7 @@ export default function L3ReportPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
-                  {['Date', 'Outlet', 'Shift', 'Stations', 'L1 %', 'Band', 'On time', 'L2', 'L3'].map((h) => (
+                  {['Date', 'Outlet', 'Shift', 'Stations', 'L1 %', 'Band', 'Temp alerts', 'On time', 'L2', 'L3'].map((h) => (
                     <th key={h} style={{ padding: '6px 8px' }}>{h}</th>
                   ))}
                 </tr>
@@ -160,13 +161,14 @@ export default function L3ReportPage() {
                     <td style={{ padding: '6px 8px' }}>{r.stationsComplete}/{r.stationCount}</td>
                     <td style={{ padding: '6px 8px' }}>{r.percent ?? '—'}</td>
                     <td style={{ padding: '6px 8px' }}>{r.band ?? '—'}</td>
+                    <td style={{ padding: '6px 8px', color: r.outOfRange ? 'var(--locked)' : undefined, fontWeight: r.outOfRange ? 700 : undefined }}>{r.outOfRange ? `⚠ ${r.outOfRange}` : '—'}</td>
                     <td style={{ padding: '6px 8px' }}>{r.onTime === null ? '—' : r.onTime ? 'Yes' : 'Late'}</td>
                     <td style={{ padding: '6px 8px' }}>{r.l2Complete ? 'Done' : '—'}</td>
                     <td style={{ padding: '6px 8px' }}>{r.l3Complete ? 'Done' : '—'}</td>
                   </tr>
                 ))}
                 {report && report.rows.length === 0 && (
-                  <tr><td colSpan={9} style={{ padding: 16, textAlign: 'center' }} className="empty">No line checks in this range.</td></tr>
+                  <tr><td colSpan={10} style={{ padding: 16, textAlign: 'center' }} className="empty">No line checks in this range.</td></tr>
                 )}
               </tbody>
             </table>

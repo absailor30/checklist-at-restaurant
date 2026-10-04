@@ -2,6 +2,7 @@ import { json } from '@/lib/no-store';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { readSession } from '@/lib/session';
 import { findQuestion, loadBank } from '@/lib/line-check/bank';
+import { describeRange, isOutOfRange } from '@/lib/line-check/score-answer';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -88,6 +89,10 @@ export async function POST(request: Request) {
 
   for (const a of answers) {
     const questionId = a.questionId;
+    const question = findQuestion(bank, questionId);
+    // A temperature outside the acceptable range is always flagged, whatever the client sent.
+    const outOfRange = question ? isOutOfRange(question, { questionId, yesNo: a.yesNo, value: a.value }) : false;
+    const flagged = Boolean(a.flagged) || outOfRange;
 
     // Photos are uploaded immediately on capture via /api/l1/line-check/photo
     // — this request just carries the resulting path, never file bytes.
@@ -99,7 +104,9 @@ export async function POST(request: Request) {
         yes_no: a.yesNo,
         value_number: a.value,
         reason: a.reason,
-        flagged: Boolean(a.flagged),
+        flagged,
+        out_of_range: outOfRange,
+        ...(a.correctionPhotoPath ? { correction_photo_path: a.correctionPhotoPath } : {}),
         ...(a.photoPath ? { photo_path: a.photoPath } : {}),
         ...(a.aiVerified !== undefined && a.aiVerified !== null ? { ai_verified: a.aiVerified, ai_note: a.aiNote ?? null } : {}),
       }, { onConflict: 'station_id, question_id' });
@@ -112,7 +119,7 @@ export async function POST(request: Request) {
     // rather than the flag just sitting on the answer unnoticed. One per
     // outlet+question+day is enough — repeat syncs of the same flag must
     // not pile up duplicates.
-    if (a.flagged) {
+    if (flagged) {
       const { data: existing } = await db
         .from('corrective_actions')
         .select('id')
@@ -123,13 +130,16 @@ export async function POST(request: Request) {
         .gte('created_at', `${runDate}T00:00:00Z`)
         .maybeSingle();
       if (!existing) {
-        const q = findQuestion(bank, questionId);
+        const q = question;
+        const description = outOfRange && q
+          ? `${q.prompt}: reading ${a.value}${q.unit ?? ''}, outside ${describeRange(q)}.${a.reason ? ` ${a.reason}` : ''}`
+          : (q?.prompt ?? questionId);
         await db.from('corrective_actions').insert({
           org_id: session.orgId,
           outlet_id: session.outletId,
           source: 'l1',
           question_id: questionId,
-          description: q?.prompt ?? questionId,
+          description,
           assigned_role: 'L2 Manager',
         });
       }

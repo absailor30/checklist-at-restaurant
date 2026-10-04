@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { LineCheckQuestion } from '@/lib/line-check/questions';
 import type { Bank } from '@/lib/line-check/bank';
-import { canAdvance, scoreAnswer, type LineCheckAnswer, type YesNoNa } from '@/lib/line-check/score-answer';
+import { canAdvance, describeRange, inRange, isOutOfRange, scoreAnswer, type LineCheckAnswer, type YesNoNa } from '@/lib/line-check/score-answer';
 import { bandOf } from '@/lib/scoring';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { NotificationBell } from '@/components/notifications';
@@ -290,6 +290,7 @@ export default function StaffLineCheckPage() {
       reason: a.reason,
       flagged: a.flagged ?? false,
       photoPath: a.photoPath ?? null,
+      correctionPhotoPath: a.correctionPhotoPath ?? null,
       aiVerified: a.aiVerified ?? null,
       aiNote: a.aiNote ?? null,
     }));
@@ -665,7 +666,8 @@ function QuestionCard({
   const [showComment, setShowComment] = useState(false);
   const [showMedia, setShowMedia] = useState(false);
 
-  const commentRequired = needsReason(q, a);
+  const outOfRange = isOutOfRange(q, a);
+  const commentRequired = needsReason(q, a) || outOfRange;
   const mediaRequired = needsPhoto(q, a) || q.kind === 'numeric_photo' || (q.kind === 'numeric' && a?.yesNo !== 'na');
   const commentOpen = showComment || commentRequired || Boolean(a?.reason);
   const mediaOpen = showMedia || mediaRequired || Boolean(a?.photoDataUrl);
@@ -685,14 +687,18 @@ function QuestionCard({
 
       {(q.kind === 'numeric_photo' || q.kind === 'numeric') && (
         <>
-          <label htmlFor="temp">Reading {q.unit ?? ''}</label>
+          <label htmlFor="temp">Reading {q.unit ?? ''}{q.kind === 'numeric' ? ` — acceptable: ${describeRange(q)}` : ''}</label>
           <input
             id="temp"
             type="number"
             inputMode="decimal"
             value={a?.yesNo === 'na' ? '' : (a?.value ?? '')}
             disabled={a?.yesNo === 'na'}
-            onChange={(e) => onChange({ value: e.target.value === '' ? null : Number(e.target.value), yesNo: undefined })}
+            onChange={(e) => {
+              const v = e.target.value === '' ? null : Number(e.target.value);
+              const out = q.kind === 'numeric' && v !== null && !Number.isNaN(v) && !inRange(q, v);
+              onChange({ value: v, yesNo: undefined, ...(out ? { flagged: true } : {}) });
+            }}
           />
           {q.kind === 'numeric' && (
             <div className="btn-row" style={{ marginTop: 12 }}>
@@ -749,6 +755,13 @@ function QuestionCard({
         </button>
       </div>
 
+      {outOfRange && (
+        <div className="banner error" style={{ marginTop: 12 }}>
+          <strong>Outside the acceptable range</strong> ({describeRange(q)}) — flagged for L2 and L3.
+          Add what you did to correct it in the comments before moving on.
+        </div>
+      )}
+
       {commentOpen && (
         <>
           <label htmlFor="reason">Comments / Corrective actions {commentRequired ? '(required)' : '(if applicable)'}</label>
@@ -767,6 +780,16 @@ function QuestionCard({
           stationNo={stationNo}
           onUploaded={(photoDataUrl, photoPath, aiVerified, aiNote) => onChange({ photoDataUrl, photoPath, aiVerified, aiNote })}
           required={mediaRequired}
+        />
+      )}
+      {outOfRange && (
+        <PhotoField
+          correction
+          label="Photo after correction (optional)"
+          value={a?.correctionPhotoDataUrl}
+          questionId={q.id}
+          stationNo={stationNo}
+          onUploaded={(photoDataUrl, photoPath) => onChange({ correctionPhotoDataUrl: photoDataUrl, correctionPhotoPath: photoPath })}
         />
       )}
     </article>
@@ -792,12 +815,17 @@ function PhotoField({
   stationNo,
   onUploaded,
   required,
+  label,
+  correction,
 }: {
   value?: string | null;
   questionId: string;
   stationNo: number;
   onUploaded: (photoDataUrl: string, photoPath: string, aiVerified: boolean | null, aiNote: string | null) => void;
   required?: boolean;
+  label?: string;
+  /** The optional second photo taken after a corrective action. */
+  correction?: boolean;
 }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -814,6 +842,7 @@ function PhotoField({
       form.append('file', file);
       form.append('questionId', questionId);
       form.append('stationNo', stationNo.toString());
+      if (correction) form.append('kind', 'correction');
       const res = await fetch('/api/l1/line-check/photo', { method: 'POST', body: form });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Photo upload failed.');
@@ -828,7 +857,7 @@ function PhotoField({
 
   return (
     <>
-      <label>Photo {required ? '(required)' : '(optional)'}</label>
+      <label>{label ?? `Photo ${required ? '(required)' : '(optional)'}`}</label>
       <div>
         <button type="button" className="btn-ghost" disabled={uploading} onClick={() => setCameraOpen(true)}>
           {value ? 'Retake photo' : 'Take photo'}

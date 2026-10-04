@@ -20,6 +20,7 @@ export async function POST(request: Request) {
   const file = form.get('file') as File | null;
   const questionId = form.get('questionId') as string | null;
   const stationNo = Number(form.get('stationNo'));
+  const isCorrection = form.get('kind') === 'correction';
 
   if (!file || file.size === 0) return json({ error: 'No photo attached.' }, { status: 400 });
   if (!questionId) return json({ error: 'questionId required.' }, { status: 400 });
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
   const tz = outlet?.timezone || 'UTC';
   const runDate = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
-  const photoPath = `${session.orgId}/${session.outletId}/${runDate}/st${stationNo}_${questionId}_${Date.now()}.jpg`;
+  const photoPath = `${session.orgId}/${session.outletId}/${runDate}/st${stationNo}_${questionId}${isCorrection ? '_fix' : ''}_${Date.now()}.jpg`;
   const { error } = await db.storage
     .from(PHOTO_BUCKET)
     .upload(photoPath, file, { contentType: 'image/jpeg', upsert: true });
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
   let aiNote: string | null = null;
   const bank = await loadBank(db, session.orgId, outlet?.station_count ?? 3);
   const question = findQuestion(bank, questionId);
-  if (question) {
+  if (question && !isCorrection) {
     const bytes = Buffer.from(await file.arrayBuffer());
     const result = await verifyPhoto(bytes.toString('base64'), file.type || 'image/jpeg', question.prompt);
     if (result) { aiVerified = result.verified; aiNote = result.note; }

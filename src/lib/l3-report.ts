@@ -10,7 +10,7 @@ import { bandOf } from '@/lib/scoring';
 
 export interface L3ReportRow {
   date: string; outletId: string; outletName: string; shift: string; checkTime: string | null;
-  stationsComplete: number; stationCount: number; l1Complete: boolean;
+  stationsComplete: number; stationCount: number; l1Complete: boolean; outOfRange: number;
   percent: number | null; band: string | null; onTime: boolean | null;
   l2Complete: boolean; l3Complete: boolean;
 }
@@ -55,7 +55,7 @@ export async function buildL3Report(
       id, outlet_id, run_date, shift, check_time, l2_completed_at, l3_completed_at,
       line_check_stations (
         station_no, status, completed_at,
-        line_check_answers ( question_id, yes_no, value_number, photo_path, reason )
+        line_check_answers ( question_id, yes_no, value_number, photo_path, reason, out_of_range )
       )
     `)
     .in('outlet_id', outlets.map((o) => o.id))
@@ -74,6 +74,8 @@ export async function buildL3Report(
     const stationCount = bank.own ? bank.stations.length : (outlet?.station_count ?? 3);
     const stations = r.line_check_stations ?? [];
     const completed = stations.filter((s: any) => s.status === 'complete');
+    const outOfRange = stations.reduce(
+      (n: number, s: any) => n + (s.line_check_answers ?? []).filter((a: any) => a.out_of_range).length, 0);
 
     let scoredTotal = 0, pointsTotal = 0, lateAny = false;
     for (const st of completed) {
@@ -106,6 +108,7 @@ export async function buildL3Report(
       stationsComplete: completed.length,
       stationCount,
       l1Complete: completed.length === stationCount,
+      outOfRange,
       percent,
       band: percent !== null ? bandOf(percent) : null,
       onTime: completed.length > 0 && bank.hardStop ? !lateAny : null,

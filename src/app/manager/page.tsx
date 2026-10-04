@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { CameraCapture } from '@/components/camera-capture';
 import { formatCheckTime } from '@/lib/line-check/time';
+import { loginEmail } from '@/lib/login-id';
 
 const SHIFTS = [
   { id: 'morning', label: 'Morning shift' },
@@ -284,7 +285,7 @@ export default function ManagerDashboard() {
     e.preventDefault();
     setLoginBusy(true);
     setLoginError('');
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail(email), password });
     setLoginBusy(false);
     if (error) setLoginError(error.message);
   };
@@ -389,10 +390,10 @@ export default function ManagerDashboard() {
         {loginError && <div className="banner error">{loginError}</div>}
         <form className="card" onSubmit={handleLogin}>
           <div>
-            <label htmlFor="email" style={{ marginTop: 0 }}>Email</label>
+            <label htmlFor="email" style={{ marginTop: 0 }}>Email or username</label>
             <input
               id="email"
-              type="email"
+              type="text" autoCapitalize="none" autoCorrect="off"
               value={email}
               autoComplete="username"
               onChange={(e) => setEmail(e.target.value)}
@@ -732,6 +733,8 @@ export default function ManagerDashboard() {
                     </div>
                   </div>
 
+                  {run.exceptions?.length > 0 && <ExceptionsPanel exceptions={run.exceptions} stationNames={stationNames} />}
+
                   <div className="lockbox">
                     <div className="row">
                       <div className="label" style={{ margin: 0, display: 'flex', alignItems: 'center' }}>L2 Review (Manager)</div>
@@ -788,6 +791,12 @@ export default function ManagerDashboard() {
         <div className="sheet-backdrop">
           <div className="sheet">
             <h3>{reviewLevel} Review</h3>
+            {(() => {
+              const reviewRun = outlets.flatMap((o: any) => o.line_check_runs ?? []).find((r: any) => r.id === reviewRunId);
+              return reviewRun?.exceptions?.length > 0
+                ? <ExceptionsPanel exceptions={reviewRun.exceptions} stationNames={stationNames} />
+                : null;
+            })()}
             {questions.length === 0 ? (
               <div className="spinner" />
             ) : (
@@ -893,5 +902,57 @@ export default function ManagerDashboard() {
         </div>
       )}
     </>
+  );
+}
+function rangeText(min: number | null, max: number | null, unit: string) {
+  if (min !== null && max !== null) return `between ${min} and ${max}${unit}`;
+  if (max !== null) return `at or below ${max}${unit}`;
+  if (min !== null) return `at least ${min}${unit}`;
+  return 'the acceptable range';
+}
+
+// Temperature readings an L1 recorded outside the acceptable range, with their
+// comment/corrective action and photos, shown to L2 and L3 on the shift card
+// and at the top of the review.
+function ExceptionsPanel({ exceptions, stationNames }: { exceptions: any[]; stationNames: string[] }) {
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [photoError, setPhotoError] = useState('');
+
+  const show = async (path: string) => {
+    setPhotoError('');
+    try {
+      const res = await fetch(`/api/manager/line-check/photo-url?path=${encodeURIComponent(path)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setUrls((prev) => ({ ...prev, [path]: data.url }));
+    } catch (e: any) {
+      setPhotoError(e.message || 'Could not load the photo.');
+    }
+  };
+
+  const photo = (path: string | null, label: string) => path && (
+    urls[path]
+      ? <img src={urls[path]} alt={label} style={{ maxWidth: '100%', borderRadius: 8, marginTop: 6 }} />
+      : <button className="btn-ghost" style={{ width: 'auto', minHeight: 32, padding: '4px 10px', fontSize: 12 }} onClick={() => show(path)}>{label}</button>
+  );
+
+  return (
+    <div className="banner error" style={{ marginTop: 12 }}>
+      <strong>⚠ {exceptions.length} temperature reading{exceptions.length === 1 ? '' : 's'} outside the acceptable range</strong>
+      {photoError && <div className="desc">{photoError}</div>}
+      {exceptions.map((e, i) => (
+        <div key={i} style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+          <div style={{ fontWeight: 600 }}>{e.prompt}</div>
+          <div className="desc">
+            {stationNames[e.stationNo - 1] || `Station ${e.stationNo}`} · reading {e.value}{e.unit}, should be {rangeText(e.min, e.max, e.unit)}
+          </div>
+          <div className="desc">{e.reason ? `Corrective action: ${e.reason}` : 'No corrective action recorded.'}</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {photo(e.photoPath, 'View photo')}
+            {photo(e.correctionPhotoPath, 'View photo after correction')}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

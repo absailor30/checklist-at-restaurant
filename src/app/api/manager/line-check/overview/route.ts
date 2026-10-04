@@ -71,6 +71,7 @@ export async function GET(request: Request) {
           l2_completed_at,
           l3_completed_at,
           line_check_stations (
+            id,
             station_no,
             status,
             pause_reason,
@@ -97,6 +98,7 @@ export async function GET(request: Request) {
             l2_completed_at,
             l3_completed_at,
             line_check_stations (
+              id,
               station_no,
               status,
               pause_reason
@@ -115,9 +117,50 @@ export async function GET(request: Request) {
       }
     }
 
+    // Temperature readings outside the acceptable range, so L2/L3 see them
+    // on the shift card and again when they open the review. Never allowed to
+    // break the overview itself.
+    const exceptionsByRun = new Map<string, any[]>();
+    try {
+      const stationRun = new Map<string, { runId: string; stationNo: number }>();
+      for (const r of runs) for (const s of r.line_check_stations ?? []) stationRun.set(s.id, { runId: r.id, stationNo: s.station_no });
+      if (stationRun.size) {
+        const { data: oor } = await supabase
+          .from('line_check_answers')
+          .select('station_id, question_id, value_number, reason, photo_path, correction_photo_path')
+          .in('station_id', [...stationRun.keys()])
+          .eq('out_of_range', true);
+        const qIds = [...new Set((oor ?? []).map((a: any) => a.question_id))];
+        const { data: qs } = qIds.length
+          ? await supabase.from('line_check_questions').select('id, prompt, min_value, max_value, unit').in('id', qIds)
+          : { data: [] as any[] };
+        const qById = new Map((qs ?? []).map((q: any) => [q.id, q]));
+        for (const a of oor ?? []) {
+          const where = stationRun.get(a.station_id);
+          const q = qById.get(a.question_id);
+          if (!where) continue;
+          const list = exceptionsByRun.get(where.runId) ?? [];
+          list.push({
+            stationNo: where.stationNo,
+            prompt: q?.prompt ?? a.question_id,
+            value: a.value_number,
+            unit: q?.unit ?? '',
+            min: q?.min_value ?? null,
+            max: q?.max_value ?? null,
+            reason: a.reason,
+            photoPath: a.photo_path,
+            correctionPhotoPath: a.correction_photo_path,
+          });
+          exceptionsByRun.set(where.runId, list);
+        }
+      }
+    } catch (e) {
+      console.error('Exceptions lookup failed:', e);
+    }
+
     const outletsWithRuns = outlets.map((outlet: any) => ({
       ...outlet,
-      line_check_runs: runs?.filter((r: any) => r.outlet_id === outlet.id) || []
+      line_check_runs: (runs?.filter((r: any) => r.outlet_id === outlet.id) || []).map((r: any) => ({ ...r, exceptions: exceptionsByRun.get(r.id) ?? [] })),
     }));
 
     return NextResponse.json({ outlets: outletsWithRuns, role: roleName || null, approved: true, name: profile.name, email: profile.email, stationNames, hardStop, shiftLabels });
