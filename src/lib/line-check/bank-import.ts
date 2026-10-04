@@ -112,6 +112,15 @@ export function parseBakeryLineCheck(buffer: Buffer | ArrayBuffer): ImportedStat
   return stations.filter((s) => s.questions.length > 0);
 }
 
+/** Combines the named sections into one station (placed where the first one was). */
+export function mergeStations(stations: ImportedStation[], names: string[], mergedName: string): ImportedStation[] {
+  const parts = stations.filter((st) => names.includes(st.name));
+  if (parts.length < 2) return stations;
+  const merged: ImportedStation = { name: mergedName, questions: parts.flatMap((st) => st.questions) };
+  const first = stations.findIndex((st) => names.includes(st.name));
+  return stations.flatMap((st, i) => (i === first ? [merged] : names.includes(st.name) ? [] : [st]));
+}
+
 const sqlStr = (v: string | null) => (v === null ? 'null' : `'${v.replace(/'/g, "''")}'`);
 const sqlNum = (v: number | null) => (v === null ? 'null' : String(v));
 
