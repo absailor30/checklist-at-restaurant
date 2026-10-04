@@ -1,4 +1,4 @@
--- L1 bank for "Bakelore Bakery & Café": 12 stations, 150 questions.
+-- L1 bank for "Bakelore Bakery & Café": 13 stations, 150 questions.
 do $$ declare v_org uuid; std text[] := array[
     '[Chilled ] [≤−5°C] [As per MRD label ] [ in sealed pack zip lock pouch – No freezer burn, discoloration, or unusual odor; packaging sealed, clean and properly..After cooking – Uniform shape, golden-brown outside, fully cooked inside, with proper texture and no sogginess or excessive dryness.',
     '[Chilled] [≤5°C] [As per MRD label] [Pre-made grilled chicken base] – Evenly shredded, juicy and tender, with no excessive dryness, discoloration, or unusual odor,Store covered, properly dated and labelled; maintain safe temperature and discard if shelf life, appearance, texture, or odor is outside standard.',
@@ -52,8 +52,8 @@ do $$ declare v_org uuid; std text[] := array[
   select id into v_org from organisations where name = 'Bakelore Bakery & Café';
   if v_org is null then raise exception 'Organisation % not found', 'Bakelore Bakery & Café'; end if;
   update organisations set line_check_config = coalesce(line_check_config, '{}'::jsonb)
-    || jsonb_build_object('stationNames', '["Savory Kitchen","Salad & Sandwich Prep","Sauces & Condiments","Breads","Puffs & Buns","Cookies & Munching","Pastry","Jar","Signature Cake","Baked Goodies","Gift Hampers & Fillings","Barista Station"]'::jsonb, 'hardStop', 'none', 'askCheckTime', true, 'shiftLabels', jsonb_build_object('morning', 'Opening', 'afternoon', 'Mid Shift', 'evening', 'Closing')) where id = v_org;
-  update outlets set station_count = 12 where org_id = v_org;
+    || jsonb_build_object('stationNames', '["Savory Kitchen","Salad & Sandwich Prep","Sauces & Condiments","Breads","Puffs & Buns","Cookies & Munching","Pastry","Jar","Signature Cake","Baked Goodies","Gift Hampers","Fillings","Barista Station"]'::jsonb, 'hardStop', 'none', 'askCheckTime', true, 'shiftLabels', jsonb_build_object('morning', 'Opening', 'afternoon', 'Mid Shift', 'evening', 'Closing')) where id = v_org;
+  update outlets set station_count = 13 where org_id = v_org;
   insert into line_check_questions (id, level, sort_order, kind, prompt, expected, unit, min_value, max_value, photo_required, reason_on_no, notes, org_id, station_no, yes_label) values
     ('bkc-s1-q1', 'L1', 1, 'numeric', 'Veg patty — temperature', null, '°C', null, -5, true, false, 'Required: 0–5°C (chilled) · Shelf life: 3 days · Standard: ' || std[1], v_org, 1, null),
     ('bkc-s1-q2', 'L1', 2, 'numeric', 'Chicken shredded — temperature', null, '°C', 0, 5, true, false, 'Required: 0–5°C (chilled) · Shelf life: 3 days · Standard: ' || std[2], v_org, 1, null),
@@ -193,18 +193,18 @@ do $$ declare v_org uuid; std text[] := array[
     ('bkc-s10-q21', 'L1', 21, 'yes_no', 'Cardamom rusk — meets standard?', 'yes', null, null, null, false, false, 'Required: Ambient (cool, dry) · Shelf life: 45 days · Standard: ' || std[35], v_org, 10, 'Yes (Ambient, cool)'),
     ('bkc-s11-q1', 'L1', 1, 'yes_no', 'Almond chocolate rocks — meets standard?', 'yes', null, null, null, false, false, 'Required: Ambient (cool, dry) · Shelf life: 30 days · Standard: ' || std[36], v_org, 11, 'Yes (Ambient, cool)'),
     ('bkc-s11-q2', 'L1', 2, 'yes_no', 'Cashew chocolate rocks — meets standard?', 'yes', null, null, null, false, false, 'Required: Ambient (cool, dry) · Shelf life: 30 days · Standard: ' || std[36], v_org, 11, 'Yes (Ambient, cool)'),
-    ('bkc-s11-q3', 'L1', 3, 'numeric', 'Dressing cake cone cream — temperature', null, '°C', 0, 5, true, false, 'Required: 0–5°C (chilled) · Shelf life: Opened: 2 days · Standard: ' || std[37], v_org, 11, null),
-    ('bkc-s12-q1', 'L1', 1, 'numeric', 'Coffee machine (Carimali) — temperature', null, '°C', 90, null, true, false, 'Required: Brew water 90–96°C · Standard: ' || std[38], v_org, 12, null),
-    ('bkc-s12-q2', 'L1', 2, 'numeric', 'Milk (barista station) — temperature', null, '°C', 0, 5, true, false, 'Required: 0–5°C (chilled) · Shelf life: Opened: 1 days · Standard: ' || std[39], v_org, 12, null),
-    ('bkc-s12-q3', 'L1', 3, 'numeric', 'Pizza oven (equipment) — temperature', null, '°C', 250, null, true, false, 'Required: As per SOP · Standard: ' || std[40], v_org, 12, null),
-    ('bkc-s12-q4', 'L1', 4, 'yes_no', 'Sandwich / burger press (equipment) — meets standard?', 'yes', null, null, null, false, false, 'Required: As per SOP · Standard: ' || std[41], v_org, 12, null),
-    ('bkc-s12-q5', 'L1', 5, 'numeric', 'Coffee beans (micro auxiliary warmer) — temperature', null, '°C', 180, null, true, false, 'Required: Ambient (cool, dry) · Shelf life: As per pack · Standard: ' || std[42], v_org, 12, null),
-    ('bkc-s12-q6', 'L1', 6, 'yes_no', 'Coffee cups & lids — meets standard?', 'yes', null, null, null, false, false, 'Required: Ambient (cool, dry) · Standard: ' || std[43], v_org, 12, 'Yes (Ambient, cool)'),
-    ('bkc-s12-q7', 'L1', 7, 'yes_no', 'TL blender (equipment) — meets standard?', 'yes', null, null, null, false, false, 'Required: N/A · Standard: ' || std[44], v_org, 12, null),
-    ('bkc-s12-q8', 'L1', 8, 'yes_no', 'Frappe mix — meets standard?', 'yes', null, null, null, false, false, 'Required: Ambient (cool, dry) · Shelf life: As per pack · Standard: ' || std[45], v_org, 12, 'Yes (Ambient, cool)'),
-    ('bkc-s12-q9', 'L1', 9, 'yes_no', 'Syrups (caramel, hazelnut, chocolate sauce, mint mojito, sugar syrup, etc.) — meets standard?', 'yes', null, null, null, false, false, 'Required: Ambient (cool, dry) · Shelf life: As per pack · Standard: ' || std[46], v_org, 12, 'Yes (Ambient, cool)'),
-    ('bkc-s12-q10', 'L1', 10, 'yes_no', 'Blender / pitcher / measuring cups / shaker cups — meets standard?', 'yes', null, null, null, false, false, 'Required: N/A · Standard: ' || std[47], v_org, 12, null),
-    ('bkc-s12-q11', 'L1', 11, 'yes_no', 'Consumables – sugar, sachets, straws, stirrers, choco chips, cutlery — meets standard?', 'yes', null, null, null, false, false, 'Required: Ambient (cool, dry) · Shelf life: As per pack · Standard: ' || std[48], v_org, 12, 'Yes (Ambient, cool)')
+    ('bkc-s12-q1', 'L1', 1, 'numeric', 'Dressing cake cone cream — temperature', null, '°C', 0, 5, true, false, 'Required: 0–5°C (chilled) · Shelf life: Opened: 2 days · Standard: ' || std[37], v_org, 12, null),
+    ('bkc-s13-q1', 'L1', 1, 'numeric', 'Coffee machine (Carimali) — temperature', null, '°C', 90, null, true, false, 'Required: Brew water 90–96°C · Standard: ' || std[38], v_org, 13, null),
+    ('bkc-s13-q2', 'L1', 2, 'numeric', 'Milk (barista station) — temperature', null, '°C', 0, 5, true, false, 'Required: 0–5°C (chilled) · Shelf life: Opened: 1 days · Standard: ' || std[39], v_org, 13, null),
+    ('bkc-s13-q3', 'L1', 3, 'numeric', 'Pizza oven (equipment) — temperature', null, '°C', 250, null, true, false, 'Required: As per SOP · Standard: ' || std[40], v_org, 13, null),
+    ('bkc-s13-q4', 'L1', 4, 'yes_no', 'Sandwich / burger press (equipment) — meets standard?', 'yes', null, null, null, false, false, 'Required: As per SOP · Standard: ' || std[41], v_org, 13, null),
+    ('bkc-s13-q5', 'L1', 5, 'numeric', 'Coffee beans (micro auxiliary warmer) — temperature', null, '°C', 180, null, true, false, 'Required: Ambient (cool, dry) · Shelf life: As per pack · Standard: ' || std[42], v_org, 13, null),
+    ('bkc-s13-q6', 'L1', 6, 'yes_no', 'Coffee cups & lids — meets standard?', 'yes', null, null, null, false, false, 'Required: Ambient (cool, dry) · Standard: ' || std[43], v_org, 13, 'Yes (Ambient, cool)'),
+    ('bkc-s13-q7', 'L1', 7, 'yes_no', 'TL blender (equipment) — meets standard?', 'yes', null, null, null, false, false, 'Required: N/A · Standard: ' || std[44], v_org, 13, null),
+    ('bkc-s13-q8', 'L1', 8, 'yes_no', 'Frappe mix — meets standard?', 'yes', null, null, null, false, false, 'Required: Ambient (cool, dry) · Shelf life: As per pack · Standard: ' || std[45], v_org, 13, 'Yes (Ambient, cool)'),
+    ('bkc-s13-q9', 'L1', 9, 'yes_no', 'Syrups (caramel, hazelnut, chocolate sauce, mint mojito, sugar syrup, etc.) — meets standard?', 'yes', null, null, null, false, false, 'Required: Ambient (cool, dry) · Shelf life: As per pack · Standard: ' || std[46], v_org, 13, 'Yes (Ambient, cool)'),
+    ('bkc-s13-q10', 'L1', 10, 'yes_no', 'Blender / pitcher / measuring cups / shaker cups — meets standard?', 'yes', null, null, null, false, false, 'Required: N/A · Standard: ' || std[47], v_org, 13, null),
+    ('bkc-s13-q11', 'L1', 11, 'yes_no', 'Consumables – sugar, sachets, straws, stirrers, choco chips, cutlery — meets standard?', 'yes', null, null, null, false, false, 'Required: Ambient (cool, dry) · Shelf life: As per pack · Standard: ' || std[48], v_org, 13, 'Yes (Ambient, cool)')
   on conflict (id) do update set sort_order = excluded.sort_order, kind = excluded.kind, prompt = excluded.prompt,
     expected = excluded.expected, unit = excluded.unit, min_value = excluded.min_value, max_value = excluded.max_value,
     notes = excluded.notes, station_no = excluded.station_no, yes_label = excluded.yes_label, photo_required = excluded.photo_required;
