@@ -31,6 +31,8 @@ export default function ManagerDashboard() {
 
   const [outlets, setOutlets] = useState<any[]>([]);
   const [role, setRole] = useState<string | null>(null);
+  const [stationNames, setStationNames] = useState<string[]>([]);
+  const [hardStop, setHardStop] = useState<string | null>('12:00');
   const [myName, setMyName] = useState<string | null>(null);
   const [myEmail, setMyEmail] = useState<string | null>(null);
   const [approved, setApproved] = useState(true);
@@ -79,6 +81,8 @@ export default function ManagerDashboard() {
       const data = await res.json();
       setOutlets(data.outlets || []);
       setRole(data.role || null);
+      setStationNames(data.stationNames || []);
+      setHardStop(data.hardStop === undefined ? '12:00' : data.hardStop);
       setMyName(data.name || null);
       setMyEmail(data.email || null);
       setApproved(data.approved !== false);
@@ -665,7 +669,7 @@ export default function ManagerDashboard() {
                   <>
                   <div style={{ marginTop: 12 }}>
                     <div className="desc" style={{ marginBottom: 6 }}>L1 Stations</div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       {Array.from({ length: stationCount }, (_, i) => i + 1).map(stNo => {
                         const st = run.line_check_stations?.find((s: any) => s.station_no === stNo);
                         let statusText = 'Not Started';
@@ -687,9 +691,11 @@ export default function ManagerDashboard() {
                               const parts = formatter.formatToParts(new Date(st.completed_at));
                               const dp = Object.fromEntries(parts.map(p => [p.type, p.value]));
                               const completedLocal = `${dp.year}-${dp.month}-${dp.day} ${dp.hour}:${dp.minute}`;
-                              const cutoffLocal = `${run.run_date} 12:00`;
+                              const cutoffLocal = `${run.run_date} ${hardStop ?? '12:00'}`;
 
-                              if (completedLocal >= cutoffLocal) {
+                              if (!hardStop) {
+                                timingText = null;
+                              } else if (completedLocal >= cutoffLocal) {
                                 timingText = 'Late';
                                 timingClass = 'warn';
                               } else {
@@ -707,8 +713,8 @@ export default function ManagerDashboard() {
                         }
 
                         return (
-                          <div key={stNo} className="card" style={{ flex: 1, padding: '10px', marginBottom: 0, textAlign: 'center', boxShadow: 'none' }}>
-                            <div style={{ fontWeight: 600, fontSize: 14 }}>S{stNo}</div>
+                          <div key={stNo} className="card" style={{ flex: '1 1 96px', padding: '10px', marginBottom: 0, textAlign: 'center', boxShadow: 'none' }}>
+                            <div style={{ fontWeight: 600, fontSize: 14 }}>{stationNames[stNo - 1] || `S${stNo}`}</div>
                             <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
                               <span className={`tag ${tagClass}`} style={{ textTransform: 'capitalize' }}>
                                 {statusText}

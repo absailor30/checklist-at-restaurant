@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
+import { hardStopOf } from '@/lib/line-check/bank';
 
 export async function GET(request: Request) {
   try {
@@ -25,6 +26,15 @@ export async function GET(request: Request) {
     if (!profile.approved) {
       return NextResponse.json({ outlets: [], role: roleName || null, approved: false, name: profile.name, email: profile.email });
     }
+
+    const { data: orgRow } = await supabase
+      .from('organisations')
+      .select('line_check_config')
+      .eq('id', profile.org_id)
+      .maybeSingle();
+    const orgConfig = (orgRow?.line_check_config ?? {}) as { stationNames?: string[]; hardStop?: string };
+    const stationNames = orgConfig.stationNames ?? [];
+    const hardStop = hardStopOf(orgConfig);
 
     const { searchParams } = new URL(request.url);
     let dateStr = searchParams.get('date');
@@ -107,7 +117,7 @@ export async function GET(request: Request) {
       line_check_runs: runs?.filter((r: any) => r.outlet_id === outlet.id) || []
     }));
 
-    return NextResponse.json({ outlets: outletsWithRuns, role: roleName || null, approved: true, name: profile.name, email: profile.email });
+    return NextResponse.json({ outlets: outletsWithRuns, role: roleName || null, approved: true, name: profile.name, email: profile.email, stationNames, hardStop });
   } catch (error: any) {
     console.error('Manager overview error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

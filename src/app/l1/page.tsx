@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { L1_HARD_STOP, L1_QUESTIONS, STATIONS, type LineCheckQuestion } from '@/lib/line-check/questions';
+import type { LineCheckQuestion } from '@/lib/line-check/questions';
+import type { Bank } from '@/lib/line-check/bank';
 import { canAdvance, scoreAnswer, type LineCheckAnswer, type YesNoNa } from '@/lib/line-check/score-answer';
 import { bandOf } from '@/lib/scoring';
 import { ThemeSwitcher } from '@/components/theme-switcher';
@@ -35,11 +36,15 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-function stationScore(answers: Record<string, LineCheckAnswer>) {
+function emptyStations(bank: Bank): Record<number, StationState> {
+  return Object.fromEntries(bank.stations.map((s) => [s.no, emptyStation()]));
+}
+
+function stationScore(answers: Record<string, LineCheckAnswer>, questions: LineCheckQuestion[]) {
   let scored = 0;
   let points = 0;
   let waived = 0;
-  for (const q of L1_QUESTIONS) {
+  for (const q of questions) {
     const s = scoreAnswer(q, answers[q.id]);
     if (s === null) waived++;
     else {
@@ -77,11 +82,8 @@ export default function StaffLineCheckPage() {
   const [diagnostic, setDiagnostic] = useState<string | null>(null);
 
   // Line Check state
-  const [stations, setStations] = useState<Record<number, StationState>>({
-    1: emptyStation(),
-    2: emptyStation(),
-    3: emptyStation(),
-  });
+  const [bank, setBank] = useState<Bank | null>(null);
+  const [stations, setStations] = useState<Record<number, StationState>>({});
   const [active, setActive] = useState<number | null>(null);
   const [pauseDraft, setPauseDraft] = useState('');
 
@@ -160,11 +162,18 @@ export default function StaffLineCheckPage() {
       const data = await res.json();
       if (!res.ok) { setError(data.error); setPin(''); return; }
 
-      // Logged in! Restore any in-progress answers from before a refresh/crash.
+      // Logged in. Load this brand's stations and questions, then restore any
+      // in-progress answers from before a refresh/crash.
+      const bankRes = await fetch('/api/l1/line-check/bank', { cache: 'no-store' });
+      const loaded: Bank | null = bankRes.ok ? await bankRes.json() : null;
+      if (!loaded) { setError('Could not load the checklist. Try again.'); return; }
+      setBank(loaded);
+      let restored: Record<number, StationState> = {};
       try {
         const saved = localStorage.getItem(draftKey(outlet.id, person.id));
-        if (saved) setStations(JSON.parse(saved));
+        if (saved) restored = JSON.parse(saved);
       } catch { /* corrupt or missing draft, start fresh */ }
+      setStations({ ...emptyStations(loaded), ...restored });
       setMe({ name: person.name, role: person.role });
       setStep('list');
     } finally {
@@ -198,24 +207,27 @@ export default function StaffLineCheckPage() {
       try { localStorage.removeItem(draftKey(outlet.id, person.id)); } catch { /* ignore */ }
     }
     setPerson(null); setPin(''); setMe(null);
-    setStations({ 1: emptyStation(), 2: emptyStation(), 3: emptyStation() });
+    setStations({});
+    setBank(null);
     setStep('staff');
   }
 
   // --- line check logic ---------------------------------------------------
 
-  // This outlet may run fewer than 3 stations — a smaller outlet doesn't
-  // need to pretend it has stations it doesn't.
-  const activeStations = STATIONS.slice(0, outlet?.station_count ?? 3);
+  // Stations (and their questions) come from the brand's bank; brands without
+  // their own checklist get the default bank on up to 3 stations.
+  const activeStations = bank?.stations ?? [];
+  const questionsOf = (no: number): LineCheckQuestion[] =>
+    bank?.stations.find((s) => s.no === no)?.questions ?? [];
 
   const overall = useMemo(() => {
-    const parts = activeStations.map((s) => stationScore(stations[s.id].answers));
+    const parts = activeStations.map((s) => stationScore(stations[s.no]?.answers ?? {}, s.questions));
     const scored = parts.reduce((n, p) => n + p.scored, 0);
     const points = parts.reduce((n, p) => n + p.points, 0);
     const waived = parts.reduce((n, p) => n + p.waived, 0);
     const percent = scored ? Math.round((points / scored) * 1000) / 10 : 0;
     return { scored, points, waived, percent, band: scored ? bandOf(percent) : '—' };
-  }, [stations]);
+  }, [stations, bank]);
 
   function patch(id: number, fn: (s: StationState) => StationState) {
     setStations((prev) => ({ ...prev, [id]: fn(prev[id]) }));
@@ -308,7 +320,7 @@ export default function StaffLineCheckPage() {
       return;
     }
     setError(null);
-    if (st.index >= L1_QUESTIONS.length - 1) {
+    if (st.index >= questionsOf(id).length - 1) {
       // Completed!
       const success = await syncStation(id, 'complete');
       if (success) {
@@ -470,17 +482,20 @@ export default function StaffLineCheckPage() {
 
   if (active !== null) {
     const st = stations[active];
-    const q = L1_QUESTIONS[st.index];
+    const sb = bank?.stations.find((s) => s.no === active);
+    const qs = sb?.questions ?? [];
+    const q = qs[st.index];
+    if (!q) return null;
     const a = st.answers[q.id];
-    const progress = Math.round((st.index / L1_QUESTIONS.length) * 100);
+    const progress = Math.round((st.index / qs.length) * 100);
 
     return (
       <div className="shell">
         <header className="topbar">
           <div>
-            <h1>Station {active}</h1>
+            <h1>{sb?.name ?? `Station ${active}`}</h1>
             <div className="sub">
-              Question {st.index + 1} of {L1_QUESTIONS.length} · hard stop {L1_HARD_STOP}
+              Question {st.index + 1} of {qs.length}{bank?.hardStop ? ` · hard stop ${bank.hardStop}` : ''}
             </div>
           </div>
           <button className="btn-ghost" style={{ width: 'auto' }} onClick={() => setActive(null)}>
@@ -507,7 +522,7 @@ export default function StaffLineCheckPage() {
             Back
           </button>
           <button className="btn-primary" onClick={() => next(active, q)} disabled={busy}>
-            {busy ? 'Saving...' : st.index >= L1_QUESTIONS.length - 1 ? 'Complete station' : 'Next'}
+            {busy ? 'Saving...' : st.index >= qs.length - 1 ? 'Complete station' : 'Next'}
           </button>
         </div>
 
@@ -542,7 +557,11 @@ export default function StaffLineCheckPage() {
       <div className="shell">
         <header style={{ marginBottom: 20 }}>
           <h1>Line check — L1</h1>
-          <div className="sub">Sample bank for review · 12:00 hard stop · stations independent</div>
+          <div className="sub">
+            {bank?.own ? 'Stations independent' : 'Sample bank for review'}
+            {bank?.hardStop ? ` · ${bank.hardStop} hard stop` : ''}
+            {bank?.own ? '' : ' · stations independent'}
+          </div>
         </header>
 
         <p className="lede">
@@ -551,11 +570,11 @@ export default function StaffLineCheckPage() {
         </p>
 
         {activeStations.map((s) => {
-          const st = stations[s.id];
-          const sc = stationScore(st.answers);
+          const st = stations[s.no] ?? emptyStation();
+          const sc = stationScore(st.answers, s.questions);
           const done = Object.keys(st.answers).length;
           return (
-            <article key={s.id} className={`item ${st.status === 'complete' ? 'done' : ''}`}>
+            <article key={s.no} className={`item ${st.status === 'complete' ? 'done' : ''}`}>
               <div className="head">
                 <div className="title">{s.name}</div>
                 <span className={`tag ${st.status === 'complete' ? 'ok' : st.status === 'paused' ? 'warn' : 'plain'}`}>
@@ -563,14 +582,14 @@ export default function StaffLineCheckPage() {
                 </span>
               </div>
               <div className="desc">
-                {done}/{L1_QUESTIONS.length} answered
+                {done}/{s.questions.length} answered
                 {done ? ` · ${sc.percent}% ${sc.band}` : ''}
               </div>
               {st.pauseReason && <div className="due">Paused: {st.pauseReason}</div>}
               <div className="progress">
-                <div style={{ width: `${(done / L1_QUESTIONS.length) * 100}%` }} />
+                <div style={{ width: `${(done / s.questions.length) * 100}%` }} />
               </div>
-              <button className="btn-primary" style={{ marginTop: 12 }} onClick={() => openStation(s.id)}>
+              <button className="btn-primary" style={{ marginTop: 12 }} onClick={() => openStation(s.no)}>
                 {st.status === 'idle' ? 'Start' : st.status === 'complete' ? 'Review' : 'Resume'}
               </button>
             </article>
@@ -625,22 +644,38 @@ function QuestionCard({
     <article className="card">
       <div className="tag plain">Q{q.order}</div>
       <h2 style={{ marginTop: 10 }}>{q.prompt}</h2>
-      {q.notes && <p className="lede">{q.notes}</p>}
+      {q.notes && (q.notes.length > 140 ? (
+        <details className="lede">
+          <summary>Standard</summary>
+          {q.notes}
+        </details>
+      ) : (
+        <p className="lede">{q.notes}</p>
+      ))}
 
-      {q.kind === 'numeric_photo' && (
+      {(q.kind === 'numeric_photo' || q.kind === 'numeric') && (
         <>
           <label htmlFor="temp">Reading {q.unit ?? ''}</label>
           <input
             id="temp"
             type="number"
             inputMode="decimal"
-            value={a?.value ?? ''}
-            onChange={(e) => onChange({ value: e.target.value === '' ? null : Number(e.target.value) })}
+            value={a?.yesNo === 'na' ? '' : (a?.value ?? '')}
+            disabled={a?.yesNo === 'na'}
+            onChange={(e) => onChange({ value: e.target.value === '' ? null : Number(e.target.value), yesNo: undefined })}
           />
+          {q.kind === 'numeric' && (
+            <div className="btn-row" style={{ marginTop: 12 }}>
+              <button className={a?.yesNo === 'na' ? 'btn-primary' : 'btn-ghost'}
+                onClick={() => onChange(a?.yesNo === 'na' ? { yesNo: undefined } : { yesNo: 'na', value: null })}>
+                N/A
+              </button>
+            </div>
+          )}
         </>
       )}
 
-      {q.kind !== 'numeric_photo' && (
+      {q.kind !== 'numeric_photo' && q.kind !== 'numeric' && (
         <div className="btn-row" style={{ marginTop: 12 }}>
           <button className={a?.yesNo === 'yes' ? 'btn-primary' : 'btn-ghost'} onClick={() => yesNo('yes')}>
             Yes

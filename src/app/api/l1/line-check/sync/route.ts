@@ -1,7 +1,7 @@
 import { json } from '@/lib/no-store';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { readSession } from '@/lib/session';
-import { L1_QUESTIONS } from '@/lib/line-check/questions';
+import { findQuestion, loadBank } from '@/lib/line-check/bank';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   const pauseReason = form.get('pauseReason') as string | null;
   const answersJson = form.get('answers') as string;
 
-  if (![1, 2, 3].includes(stationNo)) {
+  if (!Number.isInteger(stationNo) || stationNo < 1 || stationNo > 30) {
     return json({ error: 'Invalid station number.' }, { status: 400 });
   }
 
@@ -33,7 +33,8 @@ export async function POST(request: Request) {
   const { data: outlet } = await db.from('outlets').select('timezone, station_count').eq('id', session.outletId).single();
   const tz = outlet?.timezone || 'UTC';
 
-  if (stationNo > (outlet?.station_count ?? 3)) {
+  const bank = await loadBank(db, session.orgId, outlet?.station_count ?? 3);
+  if (!bank.stations.some((s) => s.no === stationNo)) {
     return json({ error: 'This outlet does not have that many stations.' }, { status: 400 });
   }
 
@@ -120,7 +121,7 @@ export async function POST(request: Request) {
         .gte('created_at', `${runDate}T00:00:00Z`)
         .maybeSingle();
       if (!existing) {
-        const q = L1_QUESTIONS.find((q) => q.id === questionId);
+        const q = findQuestion(bank, questionId);
         await db.from('corrective_actions').insert({
           org_id: session.orgId,
           outlet_id: session.outletId,

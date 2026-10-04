@@ -24,6 +24,7 @@ export function inRange(q: LineCheckQuestion, value: number): boolean {
 
 export function evidenceOk(q: LineCheckQuestion, a: LineCheckAnswer | undefined): boolean {
   if (!a) return false;
+  if (q.kind === 'numeric') return true;
   if (q.kind === 'numeric_photo') return Boolean(a.photoDataUrl);
   if (q.kind === 'yes_no_photo_always') return Boolean(a.photoDataUrl);
   if (q.kind === 'yes_no_photo_on_no') {
@@ -53,7 +54,7 @@ export function scoreAnswer(
   if (q.kind !== 'numeric_photo' && a.yesNo === 'na') return null;
   if (!evidenceOk(q, a)) return 0;
 
-  if (q.kind === 'numeric_photo') {
+  if (q.kind === 'numeric_photo' || q.kind === 'numeric') {
     if (a.value === null || a.value === undefined || Number.isNaN(a.value)) return 0;
     return inRange(q, a.value) ? 1 : 0;
   }
@@ -64,6 +65,10 @@ export function scoreAnswer(
 
 export function canAdvance(q: LineCheckQuestion, a: LineCheckAnswer | undefined): boolean {
   if (!a) return false;
+  if (q.kind === 'numeric') {
+    if (a.yesNo === 'na') return true;
+    return a.value !== null && a.value !== undefined && !Number.isNaN(a.value);
+  }
   if (q.kind === 'numeric_photo') {
     return a.value !== null && a.value !== undefined && !Number.isNaN(a.value) && Boolean(a.photoDataUrl);
   }

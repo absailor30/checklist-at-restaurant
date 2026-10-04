@@ -6,6 +6,7 @@ export type QuestionKind =
   | 'yes_no_photo_on_no'
   | 'yes_no_photo_always'
   | 'numeric_photo'
+  | 'numeric'
   | 'yes_no_na'
   | 'yes_no_reason_on_no'
   | 'yes_photo_no_reason';

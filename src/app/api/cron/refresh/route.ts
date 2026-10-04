@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { ensureRuns, refreshLocks } from '@/lib/checklist';
 import { notify, recipientsForLock } from '@/lib/notify';
 import { todayIn, zonedToUtc } from '@/lib/time';
-import { L1_HARD_STOP } from '@/lib/line-check/questions';
+import { hardStopOf } from '@/lib/line-check/bank';
 import { enforceLineCheckMisses } from '@/lib/line-check/cron';
 
 export const dynamic = 'force-dynamic';
@@ -48,6 +48,11 @@ export async function GET(request: Request) {
     const { data: roles } = await db
       .from('roles').select('id, level').eq('org_id', org.id);
 
+    // Read separately so a missing column can never take the whole cron down.
+    const { data: cfgRow } = await db
+      .from('organisations').select('line_check_config').eq('id', org.id).maybeSingle();
+    const lineCheckHardStop = hardStopOf(cfgRow?.line_check_config);
+
     for (const outlet of outlets ?? []) {
       summary.outlets++;
       const date = todayIn(outlet.timezone);
@@ -55,9 +60,11 @@ export async function GET(request: Request) {
       try {
         await ensureRuns(db, outlet, date);
         
-        const cutoff = zonedToUtc(date, L1_HARD_STOP, outlet.timezone);
-        if (Date.now() >= cutoff.getTime()) {
-          await enforceLineCheckMisses(db, outlet.id, date);
+        if (lineCheckHardStop) {
+          const cutoff = zonedToUtc(date, lineCheckHardStop, outlet.timezone);
+          if (Date.now() >= cutoff.getTime()) {
+            await enforceLineCheckMisses(db, outlet.id, date);
+          }
         }
 
         const changes = await refreshLocks(db, org, outlet.id, date);

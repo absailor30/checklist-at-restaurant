@@ -2,7 +2,7 @@ import { json } from '@/lib/no-store';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { readSession } from '@/lib/session';
 import { PHOTO_BUCKET } from '@/lib/storage';
-import { L1_QUESTIONS } from '@/lib/line-check/questions';
+import { findQuestion, loadBank } from '@/lib/line-check/bank';
 import { verifyPhoto } from '@/lib/ai-verify';
 
 export const dynamic = 'force-dynamic';
@@ -23,10 +23,10 @@ export async function POST(request: Request) {
 
   if (!file || file.size === 0) return json({ error: 'No photo attached.' }, { status: 400 });
   if (!questionId) return json({ error: 'questionId required.' }, { status: 400 });
-  if (![1, 2, 3].includes(stationNo)) return json({ error: 'Invalid station number.' }, { status: 400 });
+  if (!Number.isInteger(stationNo) || stationNo < 1 || stationNo > 30) return json({ error: 'Invalid station number.' }, { status: 400 });
 
   const db = createAdminClient();
-  const { data: outlet } = await db.from('outlets').select('timezone').eq('id', session.outletId).single();
+  const { data: outlet } = await db.from('outlets').select('timezone, station_count').eq('id', session.outletId).single();
   const tz = outlet?.timezone || 'UTC';
   const runDate = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
@@ -39,7 +39,8 @@ export async function POST(request: Request) {
 
   let aiVerified: boolean | null = null;
   let aiNote: string | null = null;
-  const question = L1_QUESTIONS.find((q) => q.id === questionId);
+  const bank = await loadBank(db, session.orgId, outlet?.station_count ?? 3);
+  const question = findQuestion(bank, questionId);
   if (question) {
     const bytes = Buffer.from(await file.arrayBuffer());
     const result = await verifyPhoto(bytes.toString('base64'), file.type || 'image/jpeg', question.prompt);

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Manager } from '@/lib/supabase/server';
-import { L1_QUESTIONS } from '@/lib/line-check/questions';
+import { loadBank } from '@/lib/line-check/bank';
 import { scoreAnswer, type LineCheckAnswer } from '@/lib/line-check/score-answer';
 import { bandOf } from '@/lib/scoring';
 
@@ -64,10 +64,13 @@ export async function buildL3Report(
   if (error) throw new Error(error.message);
 
   const outletById = new Map(outlets.map((o) => [o.id, o]));
+  // The bank is per brand, so scoring uses each station's own questions.
+  const bank = await loadBank(db, manager.orgId, outlets[0].station_count ?? 3);
+  const questionsAt = (no: number) => (bank.stations.find((s) => s.no === no) ?? bank.stations[0])?.questions ?? [];
 
   const rows: L3ReportRow[] = (runs ?? []).map((r: any) => {
     const outlet = outletById.get(r.outlet_id);
-    const stationCount = outlet?.station_count ?? 3;
+    const stationCount = bank.own ? bank.stations.length : (outlet?.station_count ?? 3);
     const stations = r.line_check_stations ?? [];
     const completed = stations.filter((s: any) => s.status === 'complete');
 
@@ -82,13 +85,13 @@ export async function buildL3Report(
           reason: a.reason,
         };
       }
-      for (const q of L1_QUESTIONS) {
+      for (const q of questionsAt(st.station_no)) {
         const s = scoreAnswer(q, answers[q.id]);
         if (s !== null) { scoredTotal++; pointsTotal += s; }
       }
-      if (st.completed_at && outlet) {
+      if (bank.hardStop && st.completed_at && outlet) {
         const local = localClock(st.completed_at, outlet.timezone || 'UTC');
-        if (local >= `${r.run_date} 12:00`) lateAny = true;
+        if (local >= `${r.run_date} ${bank.hardStop}`) lateAny = true;
       }
     }
     const percent = scoredTotal ? Math.round((pointsTotal / scoredTotal) * 1000) / 10 : null;
@@ -103,7 +106,7 @@ export async function buildL3Report(
       l1Complete: completed.length === stationCount,
       percent,
       band: percent !== null ? bandOf(percent) : null,
-      onTime: completed.length > 0 ? !lateAny : null,
+      onTime: completed.length > 0 && bank.hardStop ? !lateAny : null,
       l2Complete: !!r.l2_completed_at,
       l3Complete: !!r.l3_completed_at,
     };
