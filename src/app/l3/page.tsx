@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { L3Charts } from '@/components/l3-charts';
+import { L3Insights } from '@/components/l3-insights';
 import { loginEmail } from '@/lib/login-id';
 
 interface Row {
@@ -12,6 +13,7 @@ interface Row {
   l2Complete: boolean; l3Complete: boolean;
 }
 interface Report {
+  insights?: import('@/lib/l3-report').L3Insights;
   orgName: string;
   outlets: { id: string; name: string }[];
   rows: Row[];
@@ -139,6 +141,8 @@ export default function L3ReportPage() {
             Export PDF
           </a>
         </div>
+
+        {!loading && report?.insights && <L3Insights i={report.insights} />}
 
         {!loading && report && <L3Charts rows={report.rows} />}
 

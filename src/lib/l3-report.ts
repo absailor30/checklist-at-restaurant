@@ -16,7 +16,18 @@ export interface L3ReportRow {
   l2Complete: boolean; l3Complete: boolean;
 }
 
+export interface L3Insights {
+  stationsExpected: number; stationsComplete: number; stationsMissed: number;
+  shiftsOnTime: number; shiftsLate: number; tempFails: number;
+  daily: { date: string; complete: number; missed: number; tempFails: number }[];
+  byStation: { name: string; complete: number; missed: number; tempFails: number }[];
+  byShift: { label: string; runs: number; complete: number; missed: number; late: number }[];
+  topFails: { prompt: string; station: string; count: number }[];
+  corrective: { total: number; withComment: number; withPhoto: number };
+}
+
 export interface L3Report {
+  insights?: L3Insights;
   orgName: string;
   outlets: { id: string; name: string }[];
   rows: L3ReportRow[];
@@ -58,7 +69,7 @@ export async function buildL3Report(
       id, outlet_id, run_date, shift, check_time, l2_completed_at, l3_completed_at,
       line_check_stations (
         station_no, status, completed_at,
-        line_check_answers ( question_id, yes_no, value_number, photo_path, reason, out_of_range )
+        line_check_answers ( question_id, yes_no, value_number, photo_path, reason, out_of_range, correction_photo_path )
       )
     `)
     .in('outlet_id', outlets.map((o) => o.id))
@@ -71,6 +82,53 @@ export async function buildL3Report(
   // The bank is per brand, so scoring uses each station's own questions.
   const bank = await loadBank(db, manager.orgId, outlets[0].station_count ?? 3);
   const questionsAt = (no: number) => (bank.stations.find((s) => s.no === no) ?? bank.stations[0])?.questions ?? [];
+
+  // Insights over every station of every run in range (not only completed ones).
+  const ins: L3Insights = {
+    stationsExpected: 0, stationsComplete: 0, stationsMissed: 0, shiftsOnTime: 0, shiftsLate: 0, tempFails: 0,
+    daily: [], byStation: [], byShift: [], topFails: [], corrective: { total: 0, withComment: 0, withPhoto: 0 },
+  };
+  {
+    const day = new Map<string, { complete: number; missed: number; tempFails: number }>();
+    const st = new Map<number, { complete: number; missed: number; tempFails: number }>();
+    const sh = new Map<string, { runs: number; complete: number; missed: number; late: number }>();
+    const fails = new Map<string, { prompt: string; station: string; count: number }>();
+    for (const r of runs ?? []) {
+      const dayRow = day.get(r.run_date) ?? { complete: 0, missed: 0, tempFails: 0 };
+      const shRow = sh.get(r.shift) ?? { runs: 0, complete: 0, missed: 0, late: 0 };
+      shRow.runs++;
+      const outlet = outletById.get(r.outlet_id);
+      const dl = r.shift in bank.shiftDeadlines ? bank.shiftDeadlines[r.shift] : bank.hardStop;
+      let late = false;
+      for (const s of r.line_check_stations ?? []) {
+        const row = st.get(s.station_no) ?? { complete: 0, missed: 0, tempFails: 0 };
+        if (s.status === 'complete') {
+          row.complete++; dayRow.complete++; shRow.complete++; ins.stationsComplete++;
+          if (dl && s.completed_at && outlet && localClock(s.completed_at, outlet.timezone || 'UTC') >= `${r.run_date} ${dl}`) late = true;
+        } else if (s.status === 'missed') { row.missed++; dayRow.missed++; shRow.missed++; ins.stationsMissed++; }
+        for (const a of s.line_check_answers ?? []) {
+          if (!a.out_of_range) continue;
+          row.tempFails++; dayRow.tempFails++; ins.tempFails++;
+          ins.corrective.total++;
+          if (a.reason && String(a.reason).trim()) ins.corrective.withComment++;
+          if (a.correction_photo_path) ins.corrective.withPhoto++;
+          const q = bank.stations.flatMap((b) => b.questions).find((x) => x.id === a.question_id);
+          const stationName = bank.stations.find((b) => b.no === s.station_no)?.name ?? `Station ${s.station_no}`;
+          const key = a.question_id;
+          const f = fails.get(key) ?? { prompt: (q?.prompt ?? key).replace(/ — .*$/, ''), station: stationName, count: 0 };
+          f.count++; fails.set(key, f);
+        }
+        st.set(s.station_no, row);
+      }
+      if (late) { shRow.late++; ins.shiftsLate++; } else if (shRow.complete > 0 && (r.line_check_stations ?? []).some((x: any) => x.status === 'complete') && dl) ins.shiftsOnTime++;
+      day.set(r.run_date, dayRow); sh.set(r.shift, shRow);
+    }
+    ins.stationsExpected = ins.stationsComplete + ins.stationsMissed;
+    ins.daily = [...day.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, v]) => ({ date, ...v }));
+    ins.byStation = [...st.entries()].sort(([a], [b]) => a - b).map(([no, v]) => ({ name: bank.stations.find((b) => b.no === no)?.name ?? `Station ${no}`, ...v }));
+    ins.byShift = [...sh.entries()].map(([k, v]) => ({ label: bank.shiftLabels[k] ?? k, ...v }));
+    ins.topFails = [...fails.values()].sort((a, b) => b.count - a.count).slice(0, 8);
+  }
 
   const rows: L3ReportRow[] = (runs ?? []).map((r: any) => {
     const outlet = outletById.get(r.outlet_id);
@@ -134,7 +192,7 @@ export async function buildL3Report(
     late: todayRows.filter((r) => r.onTime === false).length,
   };
 
-  return { orgName: manager.name, outlets: outlets.map((o) => ({ id: o.id, name: o.name })), rows, headline };
+  return { insights: ins, orgName: manager.name, outlets: outlets.map((o) => ({ id: o.id, name: o.name })), rows, headline };
 }
 
 function localClock(iso: string, tz: string): string {
