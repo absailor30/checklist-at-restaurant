@@ -10,5 +10,9 @@ import { env, serviceRoleKey } from '@/lib/env';
 export function createAdminClient() {
   return createClient(env.supabaseUrl, serviceRoleKey(), {
     auth: { persistSession: false, autoRefreshToken: false },
+    // Next.js caches fetch() GETs in its data cache, and that cache outlives deployments. Left
+    // alone, a read made before a config change keeps coming back after it (e.g. a brand's shift
+    // settings). Every read through this client is live database state, so never cache it.
+    global: { fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }) },
   });
 }
