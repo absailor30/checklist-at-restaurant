@@ -1,3 +1,4 @@
+import { enforceDueShifts } from '@/lib/line-check/cron';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Manager } from '@/lib/supabase/server';
 import { loadBank } from '@/lib/line-check/bank';
@@ -41,6 +42,8 @@ export async function buildL3Report(
       headline: { date: '', shiftsExpected: 0, shiftsL1Complete: 0, pendingL2: 0, pendingL3: 0, late: 0 },
     };
   }
+
+  await enforceDueShifts(db, manager.orgId, outlets);
 
   const todayLocal = new Intl.DateTimeFormat('en-CA', {
     timeZone: outlets[0].timezone || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit',

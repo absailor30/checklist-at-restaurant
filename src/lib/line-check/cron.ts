@@ -107,3 +107,38 @@ export async function enforceShiftMisses(
   }
   if (toInsert.length) await db.from('line_check_stations').insert(toInsert);
 }
+
+/**
+ * On-demand version of the deadline job: for brands with per-shift deadlines, marks
+ * unfinished stations missed for any shift whose deadline has passed, for today and
+ * yesterday only (older days are never touched). Safe to call on every dashboard load —
+ * it only writes when something is still open. Never throws.
+ */
+export async function enforceDueShifts(
+  db: SupabaseClient,
+  orgId: string,
+  outlets: { id: string; timezone: string | null; station_count: number | null }[]
+) {
+  try {
+    const { data: org } = await db.from('organisations').select('line_check_config').eq('id', orgId).maybeSingle();
+    const config = org?.line_check_config as any;
+    if (!config?.shiftDeadlines) return;
+    const { deadlineFor } = await import('./bank');
+    const { activeShiftsOf } = await import('./shifts');
+    const { todayIn, zonedToUtc } = await import('../time');
+    for (const o of outlets) {
+      const tz = o.timezone || 'UTC';
+      const today = todayIn(tz);
+      const yesterday = new Date(Date.parse(`${today}T00:00:00Z`) - 86400000).toISOString().slice(0, 10);
+      for (const date of [yesterday, today]) {
+        for (const shift of activeShiftsOf(config)) {
+          const dl = deadlineFor(config, shift);
+          if (!dl || zonedToUtc(date, dl, tz).getTime() > Date.now()) continue;
+          await enforceShiftMisses(db, o.id, date, shift, o.station_count ?? 1);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('enforceDueShifts failed:', e);
+  }
+}

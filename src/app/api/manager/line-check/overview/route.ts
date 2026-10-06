@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { enforceDueShifts } from '@/lib/line-check/cron';
 import { deadlineFor, hardStopOf } from '@/lib/line-check/bank';
 import { activeShiftsOf } from '@/lib/line-check/shifts';
 
@@ -59,6 +61,8 @@ export async function GET(request: Request) {
     if (!outlets || outlets.length === 0) {
       return NextResponse.json({ outlets: [] });
     }
+
+    await enforceDueShifts(createAdminClient(), profile.org_id, outlets);
 
     let runs: any[] = [];
 
