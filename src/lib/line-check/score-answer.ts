@@ -14,6 +14,8 @@ export interface LineCheckAnswer {
   photoPath?: string | null;
   reason?: string | null;
   flagged?: boolean;
+  /** True when the flag was switched on by the app (out-of-range temperature), so it can be switched off again. */
+  autoFlagged?: boolean;
   /** AI photo check — informational only, null means it never ran. */
   aiVerified?: boolean | null;
   aiNote?: string | null;

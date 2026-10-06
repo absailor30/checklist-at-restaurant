@@ -664,10 +664,19 @@ function QuestionCard({
 }) {
   const setReading = (v: number | null) => {
     const out = q.kind === 'numeric' && v !== null && !Number.isNaN(v) && !inRange(q, v);
-    onChange({ value: v, yesNo: undefined, ...(out ? { flagged: true } : {}) });
+    onChange({
+      value: v, yesNo: undefined,
+      ...(out ? { flagged: true, autoFlagged: a?.flagged ? Boolean(a?.autoFlagged) : true }
+        : a?.autoFlagged ? { flagged: false, autoFlagged: false } : {}),
+    });
   };
   // A temperature marked No is outside the acceptable range, so it is flagged automatically.
-  const yesNo = (v: YesNoNa) => onChange({ yesNo: v, ...(q.kind === 'temp_check' && v === 'no' ? { flagged: true } : {}) });
+  const yesNo = (v: YesNoNa) => {
+    if (q.kind !== 'temp_check') return onChange({ yesNo: v });
+    if (v === 'no') return onChange({ yesNo: v, flagged: true, autoFlagged: a?.flagged ? Boolean(a?.autoFlagged) : true });
+    // Leaving No: take the flag back only if the app put it there, not if the person did.
+    return onChange({ yesNo: v, ...(a?.autoFlagged ? { flagged: false, autoFlagged: false } : {}) });
+  };
   const [showComment, setShowComment] = useState(false);
   const [showMedia, setShowMedia] = useState(false);
 
@@ -766,7 +775,7 @@ function QuestionCard({
         <button
           type="button"
           className={a?.flagged ? 'btn-primary' : 'btn-ghost'}
-          onClick={() => onChange({ flagged: !a?.flagged })}
+          onClick={() => onChange({ flagged: !a?.flagged, autoFlagged: false })}
           aria-pressed={Boolean(a?.flagged)}
           title="Flag for follow-up"
         >
