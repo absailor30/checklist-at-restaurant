@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { LineCheckQuestion } from '@/lib/line-check/questions';
 import type { Bank } from '@/lib/line-check/bank';
+import { formatCheckTime } from '@/lib/line-check/time';
 import { canAdvance, describeRange, inRange, isOutOfRange, scoreAnswer, type LineCheckAnswer, type YesNoNa } from '@/lib/line-check/score-answer';
 import { bandOf } from '@/lib/scoring';
 import { ThemeSwitcher } from '@/components/theme-switcher';
@@ -517,7 +518,7 @@ export default function StaffLineCheckPage() {
           <div>
             <h1>{sb?.name ?? `Station ${active}`}</h1>
             <div className="sub">
-              Question {st.index + 1} of {qs.length}{bank?.hardStop ? ` · hard stop ${bank.hardStop}` : ''}
+              Question {st.index + 1} of {qs.length}{bank?.hardStop ? ` · deadline ${formatCheckTime(bank.hardStop) ?? bank.hardStop}` : ''}
             </div>
           </div>
           <button className="btn-ghost" style={{ width: 'auto' }} onClick={() => setActive(null)}>
@@ -581,7 +582,7 @@ export default function StaffLineCheckPage() {
           <h1>Line check — L1</h1>
           <div className="sub">
             {bank?.own ? 'Stations independent' : 'Sample bank for review'}
-            {bank?.hardStop ? ` · ${bank.hardStop} hard stop` : ''}
+            {bank?.hardStop ? ` · deadline ${formatCheckTime(bank.hardStop) ?? bank.hardStop}` : ''}
             {bank?.own ? '' : ' · stations independent'}
           </div>
         </header>

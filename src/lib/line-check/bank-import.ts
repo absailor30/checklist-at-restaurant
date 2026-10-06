@@ -127,7 +127,7 @@ export function bankToSql(orgName: string, stations: ImportedStation[], slug: st
   out.push(`  select id into v_org from organisations where name = ${sqlStr(orgName)};`);
   out.push(`  if v_org is null then raise exception 'Organisation % not found', ${sqlStr(orgName)}; end if;`);
   out.push(`  update organisations set line_check_config = coalesce(line_check_config, '{}'::jsonb)`);
-  out.push(`    || jsonb_build_object('stationNames', '${names.replace(/'/g, "''")}'::jsonb, 'hardStop', 'none', 'askCheckTime', true, 'activeShifts', '["morning","evening"]'::jsonb, 'shiftLabels', jsonb_build_object('morning', 'Opening', 'evening', 'Closing')) where id = v_org;`);
+  out.push(`    || jsonb_build_object('stationNames', '${names.replace(/'/g, "''")}'::jsonb, 'hardStop', 'none', 'askCheckTime', true, 'activeShifts', '["morning","evening"]'::jsonb, 'shiftDeadlines', jsonb_build_object('morning', '12:00', 'evening', '20:00'), 'shiftLabels', jsonb_build_object('morning', 'Opening', 'evening', 'Closing')) where id = v_org;`);
   out.push(`  update outlets set station_count = ${stations.length} where org_id = v_org;`);
   out.push(`  insert into line_check_questions (id, level, sort_order, kind, prompt, expected, unit, min_value, max_value, photo_required, reason_on_no, notes, org_id, station_no, yes_label) values`);
   const vals: string[] = [];

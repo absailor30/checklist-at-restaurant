@@ -7,7 +7,7 @@ import { loginEmail } from '@/lib/login-id';
 
 interface Row {
   date: string; outletId: string; outletName: string; shift: string; checkTime: string | null;
-  stationsComplete: number; stationCount: number; l1Complete: boolean; outOfRange: number;
+  stationsComplete: number; stationCount: number; l1Complete: boolean; outOfRange: number; missed: number;
   percent: number | null; band: string | null; onTime: boolean | null;
   l2Complete: boolean; l3Complete: boolean;
 }
@@ -147,7 +147,7 @@ export default function L3ReportPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
-                  {['Date', 'Outlet', 'Shift', 'Stations', 'L1 %', 'Band', 'Temp alerts', 'On time', 'L2', 'L3'].map((h) => (
+                  {['Date', 'Outlet', 'Shift', 'Stations', 'L1 %', 'Band', 'Temp alerts', 'Missed', 'On time', 'L2', 'L3'].map((h) => (
                     <th key={h} style={{ padding: '6px 8px' }}>{h}</th>
                   ))}
                 </tr>
@@ -162,13 +162,14 @@ export default function L3ReportPage() {
                     <td style={{ padding: '6px 8px' }}>{r.percent ?? '—'}</td>
                     <td style={{ padding: '6px 8px' }}>{r.band ?? '—'}</td>
                     <td style={{ padding: '6px 8px', color: r.outOfRange ? 'var(--locked)' : undefined, fontWeight: r.outOfRange ? 700 : undefined }}>{r.outOfRange ? `⚠ ${r.outOfRange}` : '—'}</td>
+                    <td style={{ padding: '6px 8px', color: r.missed ? 'var(--locked)' : undefined, fontWeight: r.missed ? 700 : undefined }}>{r.missed ? `${r.missed} missed` : '—'}</td>
                     <td style={{ padding: '6px 8px' }}>{r.onTime === null ? '—' : r.onTime ? 'Yes' : 'Late'}</td>
                     <td style={{ padding: '6px 8px' }}>{r.l2Complete ? 'Done' : '—'}</td>
                     <td style={{ padding: '6px 8px' }}>{r.l3Complete ? 'Done' : '—'}</td>
                   </tr>
                 ))}
                 {report && report.rows.length === 0 && (
-                  <tr><td colSpan={10} style={{ padding: 16, textAlign: 'center' }} className="empty">No line checks in this range.</td></tr>
+                  <tr><td colSpan={11} style={{ padding: 16, textAlign: 'center' }} className="empty">No line checks in this range.</td></tr>
                 )}
               </tbody>
             </table>

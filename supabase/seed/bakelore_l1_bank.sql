@@ -52,7 +52,7 @@ do $$ declare v_org uuid; std text[] := array[
   select id into v_org from organisations where name = 'Bakelore Bakery & Café';
   if v_org is null then raise exception 'Organisation % not found', 'Bakelore Bakery & Café'; end if;
   update organisations set line_check_config = coalesce(line_check_config, '{}'::jsonb)
-    || jsonb_build_object('stationNames', '["Savory Kitchen","Salad & Sandwich Prep","Sauces & Condiments","Breads","Puffs & Buns","Cookies & Munching","Pastry","Jar","Signature Cake","Baked Goodies","Gift Hampers","Fillings","Barista Station"]'::jsonb, 'hardStop', 'none', 'askCheckTime', true, 'activeShifts', '["morning","evening"]'::jsonb, 'shiftLabels', jsonb_build_object('morning', 'Opening', 'evening', 'Closing')) where id = v_org;
+    || jsonb_build_object('stationNames', '["Savory Kitchen","Salad & Sandwich Prep","Sauces & Condiments","Breads","Puffs & Buns","Cookies & Munching","Pastry","Jar","Signature Cake","Baked Goodies","Gift Hampers","Fillings","Barista Station"]'::jsonb, 'hardStop', 'none', 'askCheckTime', true, 'activeShifts', '["morning","evening"]'::jsonb, 'shiftDeadlines', jsonb_build_object('morning', '12:00', 'evening', '20:00'), 'shiftLabels', jsonb_build_object('morning', 'Opening', 'evening', 'Closing')) where id = v_org;
   update outlets set station_count = 13 where org_id = v_org;
   insert into line_check_questions (id, level, sort_order, kind, prompt, expected, unit, min_value, max_value, photo_required, reason_on_no, notes, org_id, station_no, yes_label) values
     ('bkc-s1-q1', 'L1', 1, 'temp_check', 'Veg patty — temperature within range?', 'yes', '°C', null, -5, true, false, 'Required: 0–5°C (chilled) · Shelf life: 3 days · Standard: ' || std[1], v_org, 1, null),

@@ -14,6 +14,6 @@ export async function GET() {
 
   const db = createAdminClient();
   const { data: outlet } = await db.from('outlets').select('station_count').eq('id', session.outletId).single();
-  const bank = await loadBank(db, session.orgId, outlet?.station_count ?? 3);
+  const bank = await loadBank(db, session.orgId, outlet?.station_count ?? 3, session.l1Shift ?? 'morning');
   return json(bank);
 }

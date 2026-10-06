@@ -4,8 +4,9 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { ensureRuns, refreshLocks } from '@/lib/checklist';
 import { notify, recipientsForLock } from '@/lib/notify';
 import { todayIn, zonedToUtc } from '@/lib/time';
-import { hardStopOf } from '@/lib/line-check/bank';
-import { enforceLineCheckMisses } from '@/lib/line-check/cron';
+import { deadlineFor, hardStopOf } from '@/lib/line-check/bank';
+import { activeShiftsOf } from '@/lib/line-check/shifts';
+import { enforceLineCheckMisses, enforceShiftMisses } from '@/lib/line-check/cron';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
 
     const { data: outlets } = await db
       .from('outlets')
-      .select('id, org_id, name, timezone')
+      .select('id, org_id, name, timezone, station_count')
       .eq('org_id', org.id)
       .eq('is_active', true);
 
@@ -52,6 +53,9 @@ export async function GET(request: Request) {
     const { data: cfgRow } = await db
       .from('organisations').select('line_check_config').eq('id', org.id).maybeSingle();
     const lineCheckHardStop = hardStopOf(cfgRow?.line_check_config);
+    // A brand with per-shift deadlines (e.g. Opening 12:00, Closing 20:00) is enforced shift by shift.
+    const perShift = Boolean((cfgRow?.line_check_config as any)?.shiftDeadlines);
+    const shifts = activeShiftsOf(cfgRow?.line_check_config);
 
     for (const outlet of outlets ?? []) {
       summary.outlets++;
@@ -60,7 +64,14 @@ export async function GET(request: Request) {
       try {
         await ensureRuns(db, outlet, date);
         
-        if (lineCheckHardStop) {
+        if (perShift) {
+          for (const shift of shifts) {
+            const deadline = deadlineFor(cfgRow?.line_check_config, shift);
+            if (deadline && Date.now() >= zonedToUtc(date, deadline, outlet.timezone).getTime()) {
+              await enforceShiftMisses(db, outlet.id, date, shift, outlet.station_count ?? 3);
+            }
+          }
+        } else if (lineCheckHardStop) {
           const cutoff = zonedToUtc(date, lineCheckHardStop, outlet.timezone);
           if (Date.now() >= cutoff.getTime()) {
             await enforceLineCheckMisses(db, outlet.id, date);

@@ -37,6 +37,7 @@ export default function ManagerDashboard() {
   const [shiftLabels, setShiftLabels] = useState<Record<string, string>>({});
   const [activeShifts, setActiveShifts] = useState<string[]>(['morning', 'afternoon', 'evening']);
   const [hardStop, setHardStop] = useState<string | null>('12:00');
+  const [shiftDeadlines, setShiftDeadlines] = useState<Record<string, string | null>>({});
   const [myName, setMyName] = useState<string | null>(null);
   const [myEmail, setMyEmail] = useState<string | null>(null);
   const [approved, setApproved] = useState(true);
@@ -89,6 +90,7 @@ export default function ManagerDashboard() {
       setShiftLabels(data.shiftLabels || {});
       setActiveShifts(data.activeShifts || ['morning', 'afternoon', 'evening']);
       setHardStop(data.hardStop === undefined ? '12:00' : data.hardStop);
+      setShiftDeadlines(data.shiftDeadlines || {});
       setMyName(data.name || null);
       setMyEmail(data.email || null);
       setApproved(data.approved !== false);
@@ -697,9 +699,11 @@ export default function ManagerDashboard() {
                               const parts = formatter.formatToParts(new Date(st.completed_at));
                               const dp = Object.fromEntries(parts.map(p => [p.type, p.value]));
                               const completedLocal = `${dp.year}-${dp.month}-${dp.day} ${dp.hour}:${dp.minute}`;
-                              const cutoffLocal = `${run.run_date} ${hardStop ?? '12:00'}`;
+                              // This shift's own deadline when the brand has one, else the brand-wide hard stop.
+                              const deadline = shiftDeadlines[shift] !== undefined ? shiftDeadlines[shift] : hardStop;
+                              const cutoffLocal = `${run.run_date} ${deadline ?? '12:00'}`;
 
-                              if (!hardStop) {
+                              if (!deadline) {
                                 timingText = null;
                               } else if (completedLocal >= cutoffLocal) {
                                 timingText = 'Late';

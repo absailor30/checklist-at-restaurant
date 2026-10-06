@@ -10,7 +10,7 @@ import { bandOf } from '@/lib/scoring';
 
 export interface L3ReportRow {
   date: string; outletId: string; outletName: string; shift: string; checkTime: string | null;
-  stationsComplete: number; stationCount: number; l1Complete: boolean; outOfRange: number;
+  stationsComplete: number; stationCount: number; l1Complete: boolean; outOfRange: number; missed: number;
   percent: number | null; band: string | null; onTime: boolean | null;
   l2Complete: boolean; l3Complete: boolean;
 }
@@ -71,6 +71,9 @@ export async function buildL3Report(
 
   const rows: L3ReportRow[] = (runs ?? []).map((r: any) => {
     const outlet = outletById.get(r.outlet_id);
+    // This shift's own deadline, else the brand-wide one.
+    const deadline = r.shift in bank.shiftDeadlines ? bank.shiftDeadlines[r.shift] : bank.hardStop;
+    const missed = (r.line_check_stations ?? []).filter((s: any) => s.status === 'missed').length;
     const stationCount = bank.own ? bank.stations.length : (outlet?.station_count ?? 3);
     const stations = r.line_check_stations ?? [];
     const completed = stations.filter((s: any) => s.status === 'complete');
@@ -92,9 +95,9 @@ export async function buildL3Report(
         const s = scoreAnswer(q, answers[q.id]);
         if (s !== null) { scoredTotal++; pointsTotal += s; }
       }
-      if (bank.hardStop && st.completed_at && outlet) {
+      if (deadline && st.completed_at && outlet) {
         const local = localClock(st.completed_at, outlet.timezone || 'UTC');
-        if (local >= `${r.run_date} ${bank.hardStop}`) lateAny = true;
+        if (local >= `${r.run_date} ${deadline}`) lateAny = true;
       }
     }
     const percent = scoredTotal ? Math.round((pointsTotal / scoredTotal) * 1000) / 10 : null;
@@ -109,9 +112,10 @@ export async function buildL3Report(
       stationCount,
       l1Complete: completed.length === stationCount,
       outOfRange,
+      missed,
       percent,
       band: percent !== null ? bandOf(percent) : null,
-      onTime: completed.length > 0 && bank.hardStop ? !lateAny : null,
+      onTime: completed.length > 0 && deadline ? !lateAny : null,
       l2Complete: !!r.l2_completed_at,
       l3Complete: !!r.l3_completed_at,
     };

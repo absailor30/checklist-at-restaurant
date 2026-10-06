@@ -20,6 +20,8 @@ export interface Bank {
   askCheckTime: boolean;
   /** The shift slots this brand actually uses (default: all three). */
   activeShifts: string[];
+  /** Deadline for each active shift ('HH:MM' or null for none). */
+  shiftDeadlines: Record<string, string | null>;
 }
 
 interface OrgConfig {
@@ -28,12 +30,21 @@ interface OrgConfig {
   shiftLabels?: Partial<Record<'morning' | 'afternoon' | 'evening', string>>;
   askCheckTime?: boolean;
   activeShifts?: string[];
+  /** Per-shift deadline: shift -> 'HH:MM' (or 'none'). Falls back to hardStop. */
+  shiftDeadlines?: Partial<Record<'morning' | 'afternoon' | 'evening', string>>;
 }
 
 export function hardStopOf(config: OrgConfig | null | undefined): string | null {
   const v = config?.hardStop;
   if (v === undefined || v === null || v === '') return L1_HARD_STOP;
   return v === 'none' ? null : v;
+}
+
+/** The deadline for one shift: its own, else the brand-wide hard stop, else the default. */
+export function deadlineFor(config: OrgConfig | null | undefined, shift: string): string | null {
+  const own = (config?.shiftDeadlines as Record<string, string> | undefined)?.[shift];
+  if (own === undefined || own === null || own === '') return hardStopOf(config);
+  return own === 'none' ? null : own;
 }
 
 function toQuestion(r: any): LineCheckQuestion {
@@ -58,7 +69,7 @@ function toQuestion(r: any): LineCheckQuestion {
  * named stations; every other brand gets the global default bank repeated on
  * `stationCount` stations, exactly as before.
  */
-export async function loadBank(db: SupabaseClient, orgId: string, stationCount: number): Promise<Bank> {
+export async function loadBank(db: SupabaseClient, orgId: string, stationCount: number, shift?: string): Promise<Bank> {
   const [{ data: org }, { data: rows }] = await Promise.all([
     db.from('organisations').select('line_check_config').eq('id', orgId).maybeSingle(),
     db.from('line_check_questions')
@@ -71,7 +82,8 @@ export async function loadBank(db: SupabaseClient, orgId: string, stationCount: 
   ]);
 
   const config = (org?.line_check_config ?? {}) as OrgConfig;
-  const hardStop = hardStopOf(config);
+  const hardStop = shift ? deadlineFor(config, shift) : hardStopOf(config);
+  const shiftDeadlines = Object.fromEntries(activeShiftsOf(config).map((s) => [s, deadlineFor(config, s)]));
   const names = config.stationNames ?? [];
 
   if (rows && rows.length > 0) {
@@ -84,7 +96,7 @@ export async function loadBank(db: SupabaseClient, orgId: string, stationCount: 
     const stations = [...byStation.entries()]
       .sort(([a], [b]) => a - b)
       .map(([no, questions]) => ({ no, name: names[no - 1] || `Station ${no}`, questions }));
-    return { stations, hardStop, own: true, shiftLabels: config.shiftLabels ?? {}, askCheckTime: Boolean(config.askCheckTime), activeShifts: activeShiftsOf(config) };
+    return { stations, hardStop, own: true, shiftLabels: config.shiftLabels ?? {}, askCheckTime: Boolean(config.askCheckTime), activeShifts: activeShiftsOf(config), shiftDeadlines };
   }
 
   const count = Math.max(1, stationCount);
@@ -93,7 +105,7 @@ export async function loadBank(db: SupabaseClient, orgId: string, stationCount: 
     name: names[i] || `Station ${i + 1}`,
     questions: L1_QUESTIONS,
   }));
-  return { stations, hardStop, own: false, shiftLabels: config.shiftLabels ?? {}, askCheckTime: Boolean(config.askCheckTime), activeShifts: activeShiftsOf(config) };
+  return { stations, hardStop, own: false, shiftLabels: config.shiftLabels ?? {}, askCheckTime: Boolean(config.askCheckTime), activeShifts: activeShiftsOf(config), shiftDeadlines };
 }
 
 export function findQuestion(bank: Bank, questionId: string): LineCheckQuestion | undefined {

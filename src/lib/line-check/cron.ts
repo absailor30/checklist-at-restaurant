@@ -55,3 +55,55 @@ export async function enforceLineCheckMisses(
     }
   }
 }
+
+/**
+ * Per-shift deadline: once a shift's deadline has passed, every station of that shift's run
+ * that is not complete is marked missed (paused stations keep the reason they were paused
+ * for). A shift nobody started gets a run with every station missed. Unlike the older
+ * enforceLineCheckMisses this looks at one shift only, so Opening's deadline never touches
+ * the Closing run.
+ */
+export async function enforceShiftMisses(
+  db: SupabaseClient,
+  outletId: string,
+  runDate: string,
+  shift: string,
+  stationCount: number
+) {
+  let { data: run } = await db
+    .from('line_check_runs')
+    .select('id')
+    .eq('outlet_id', outletId)
+    .eq('run_date', runDate)
+    .eq('shift', shift)
+    .maybeSingle();
+
+  if (!run) {
+    const { data: created } = await db
+      .from('line_check_runs')
+      .insert({ outlet_id: outletId, run_date: runDate, shift })
+      .select('id')
+      .single();
+    run = created;
+  }
+  if (!run) return;
+
+  const { data: stations } = await db
+    .from('line_check_stations')
+    .select('id, station_no, status, pause_reason')
+    .eq('run_id', run.id);
+
+  const have = new Map((stations ?? []).map((s: any) => [s.station_no, s]));
+  const toInsert: any[] = [];
+  for (let n = 1; n <= stationCount; n++) {
+    const s = have.get(n);
+    if (!s) {
+      toInsert.push({ run_id: run.id, station_no: n, status: 'missed', pause_reason: 'Never started' });
+    } else if (s.status === 'idle' || s.status === 'in_progress') {
+      await db.from('line_check_stations').update({ status: 'missed', pause_reason: 'Unfinished at deadline' }).eq('id', s.id);
+    } else if (s.status === 'paused') {
+      await db.from('line_check_stations').update({ status: 'missed' }).eq('id', s.id);
+    }
+  }
+  if (toInsert.length) await db.from('line_check_stations').insert(toInsert);
+}
