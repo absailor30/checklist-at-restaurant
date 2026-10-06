@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { hardStopOf } from '@/lib/line-check/bank';
+import { activeShiftsOf } from '@/lib/line-check/shifts';
 
 export async function GET(request: Request) {
   try {
@@ -35,6 +36,7 @@ export async function GET(request: Request) {
     const orgConfig = (orgRow?.line_check_config ?? {}) as { stationNames?: string[]; hardStop?: string };
     const stationNames = orgConfig.stationNames ?? [];
     const shiftLabels = (orgConfig as any).shiftLabels ?? {};
+    const activeShifts = activeShiftsOf(orgConfig as any);
     const hardStop = hardStopOf(orgConfig);
 
     const { searchParams } = new URL(request.url);
@@ -163,7 +165,7 @@ export async function GET(request: Request) {
       line_check_runs: (runs?.filter((r: any) => r.outlet_id === outlet.id) || []).map((r: any) => ({ ...r, exceptions: exceptionsByRun.get(r.id) ?? [] })),
     }));
 
-    return NextResponse.json({ outlets: outletsWithRuns, role: roleName || null, approved: true, name: profile.name, email: profile.email, stationNames, hardStop, shiftLabels });
+    return NextResponse.json({ outlets: outletsWithRuns, role: roleName || null, approved: true, name: profile.name, email: profile.email, stationNames, hardStop, shiftLabels, activeShifts });
   } catch (error: any) {
     console.error('Manager overview error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

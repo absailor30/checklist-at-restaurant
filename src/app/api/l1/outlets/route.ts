@@ -1,5 +1,6 @@
 import { json } from '@/lib/no-store';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { activeShiftsOf } from '@/lib/line-check/shifts';
 
 // These routes read a session cookie and live database state, so they must run
 // per-request. Without this Next.js tries to execute them at build time, which
@@ -28,7 +29,8 @@ export async function GET() {
   const orgIds = [...new Set(visible.map((o) => o.org_id))];
   const { data: orgs } = await db.from('organisations').select('id, line_check_config').in('id', orgIds);
   const labelsByOrg = new Map((orgs ?? []).map((o: any) => [o.id, o.line_check_config?.shiftLabels ?? null]));
-  const outlets = visible.map((o) => ({ ...o, shift_labels: labelsByOrg.get(o.org_id) ?? null }));
+  const shiftsByOrg = new Map((orgs ?? []).map((o: any) => [o.id, activeShiftsOf(o.line_check_config)]));
+  const outlets = visible.map((o) => ({ ...o, shift_labels: labelsByOrg.get(o.org_id) ?? null, active_shifts: shiftsByOrg.get(o.org_id) ?? null }));
 
   // serverTime proves the response is fresh rather than a cached copy.
   return json({

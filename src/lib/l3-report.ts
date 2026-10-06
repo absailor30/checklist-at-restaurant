@@ -120,7 +120,7 @@ export async function buildL3Report(
   const todayRows = rows.filter((r) => r.date === todayLocal);
   const headline = {
     date: todayLocal,
-    shiftsExpected: outlets.length * 3,
+    shiftsExpected: outlets.length * bank.activeShifts.length,
     shiftsL1Complete: todayRows.filter((r) => r.l1Complete).length,
     pendingL2: todayRows.filter((r) => r.l1Complete && !r.l2Complete).length,
     pendingL3: todayRows.filter((r) => r.l2Complete && !r.l3Complete).length,

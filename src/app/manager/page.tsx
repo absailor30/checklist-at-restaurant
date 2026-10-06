@@ -35,6 +35,7 @@ export default function ManagerDashboard() {
   const [role, setRole] = useState<string | null>(null);
   const [stationNames, setStationNames] = useState<string[]>([]);
   const [shiftLabels, setShiftLabels] = useState<Record<string, string>>({});
+  const [activeShifts, setActiveShifts] = useState<string[]>(['morning', 'afternoon', 'evening']);
   const [hardStop, setHardStop] = useState<string | null>('12:00');
   const [myName, setMyName] = useState<string | null>(null);
   const [myEmail, setMyEmail] = useState<string | null>(null);
@@ -86,6 +87,7 @@ export default function ManagerDashboard() {
       setRole(data.role || null);
       setStationNames(data.stationNames || []);
       setShiftLabels(data.shiftLabels || {});
+      setActiveShifts(data.activeShifts || ['morning', 'afternoon', 'evening']);
       setHardStop(data.hardStop === undefined ? '12:00' : data.hardStop);
       setMyName(data.name || null);
       setMyEmail(data.email || null);
@@ -517,7 +519,7 @@ export default function ManagerDashboard() {
             <p className="lede" style={{ fontSize: 13, margin: '8px 0 4px' }}>Add an L1 manager</p>
             <input placeholder="Name" value={newL1Name} onChange={(e) => setNewL1Name(e.target.value)} />
             <div className="btn-row" style={{ marginTop: 6 }}>
-              {(['morning', 'afternoon', 'evening'] as const).map((s) => (
+              {(['morning', 'afternoon', 'evening'] as const).filter((s) => activeShifts.includes(s)).map((s) => (
                 <button key={s} className={newL1Shift === s ? 'btn-primary' : 'btn-ghost'} onClick={() => setNewL1Shift(s)}>
                   {shiftLabels[s] ?? s}
                 </button>
@@ -649,7 +651,7 @@ export default function ManagerDashboard() {
                 <div className="title">{outlet.name}</div>
               </div>
 
-              {SHIFTS.map(({ id: shift, label }) => {
+              {SHIFTS.filter(({ id }) => activeShifts.includes(id)).map(({ id: shift, label }) => {
                 const run = runs.find((r: any) => r.shift === shift) || null;
 
                 const stationCount = outlet.station_count ?? 3;

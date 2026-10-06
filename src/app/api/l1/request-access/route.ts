@@ -1,6 +1,7 @@
 import { json } from '@/lib/no-store';
 import bcrypt from 'bcryptjs';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { activeShiftsOf } from '@/lib/line-check/shifts';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,9 @@ export async function POST(request: Request) {
   const db = createAdminClient();
   const { data: outlet } = await db.from('outlets').select('org_id').eq('id', outletId).maybeSingle();
   if (!outlet) return json({ error: 'Outlet not found.' }, { status: 404 });
+
+  const { data: orgRow } = await db.from('organisations').select('line_check_config').eq('id', outlet.org_id).maybeSingle();
+  if (!activeShiftsOf(orgRow?.line_check_config).includes(shift)) return json({ error: 'That shift is not used by this brand.' }, { status: 400 });
 
   const { data: role } = await db.from('roles').select('id').eq('org_id', outlet.org_id).eq('name', 'L1 Manager').maybeSingle();
   if (!role) return json({ error: 'L1 Manager role not found for this brand.' }, { status: 500 });

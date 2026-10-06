@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { L1_HARD_STOP, L1_QUESTIONS, type LineCheckQuestion, type QuestionKind } from './questions';
+import { activeShiftsOf } from './shifts';
 
 export interface BankStation {
   no: number;
@@ -17,6 +18,8 @@ export interface Bank {
   shiftLabels: Record<string, string>;
   /** Whether L1 picks the time the check is done (15-minute steps). */
   askCheckTime: boolean;
+  /** The shift slots this brand actually uses (default: all three). */
+  activeShifts: string[];
 }
 
 interface OrgConfig {
@@ -24,6 +27,7 @@ interface OrgConfig {
   hardStop?: string;
   shiftLabels?: Partial<Record<'morning' | 'afternoon' | 'evening', string>>;
   askCheckTime?: boolean;
+  activeShifts?: string[];
 }
 
 export function hardStopOf(config: OrgConfig | null | undefined): string | null {
@@ -80,7 +84,7 @@ export async function loadBank(db: SupabaseClient, orgId: string, stationCount: 
     const stations = [...byStation.entries()]
       .sort(([a], [b]) => a - b)
       .map(([no, questions]) => ({ no, name: names[no - 1] || `Station ${no}`, questions }));
-    return { stations, hardStop, own: true, shiftLabels: config.shiftLabels ?? {}, askCheckTime: Boolean(config.askCheckTime) };
+    return { stations, hardStop, own: true, shiftLabels: config.shiftLabels ?? {}, askCheckTime: Boolean(config.askCheckTime), activeShifts: activeShiftsOf(config) };
   }
 
   const count = Math.max(1, stationCount);
@@ -89,7 +93,7 @@ export async function loadBank(db: SupabaseClient, orgId: string, stationCount: 
     name: names[i] || `Station ${i + 1}`,
     questions: L1_QUESTIONS,
   }));
-  return { stations, hardStop, own: false, shiftLabels: config.shiftLabels ?? {}, askCheckTime: Boolean(config.askCheckTime) };
+  return { stations, hardStop, own: false, shiftLabels: config.shiftLabels ?? {}, askCheckTime: Boolean(config.askCheckTime), activeShifts: activeShiftsOf(config) };
 }
 
 export function findQuestion(bank: Bank, questionId: string): LineCheckQuestion | undefined {

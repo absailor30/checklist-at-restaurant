@@ -11,7 +11,7 @@ import { CameraCapture } from '@/components/camera-capture';
 
 type Step = 'outlet' | 'staff' | 'pin' | 'list' | 'request' | 'requested';
 
-interface Outlet { id: string; name: string; org_id: string; timezone: string; station_count?: number; shift_labels?: Record<string, string> | null }
+interface Outlet { id: string; name: string; org_id: string; timezone: string; station_count?: number; shift_labels?: Record<string, string> | null; active_shifts?: string[] | null }
 interface Staff { id: string; name: string; role: string; level: number; needsPin: boolean; shift?: string }
 
 type StationStatus = 'idle' | 'in_progress' | 'paused' | 'complete';
@@ -436,7 +436,7 @@ export default function StaffLineCheckPage() {
         <input id="reqName" value={reqName} onChange={(e) => setReqName(e.target.value)} />
         <label htmlFor="reqShift" style={{ marginTop: 12 }}>Your shift</label>
         <div className="btn-row">
-          {(['morning', 'afternoon', 'evening'] as const).map((s) => (
+          {((outlet?.active_shifts ?? ['morning', 'afternoon', 'evening']) as ('morning' | 'afternoon' | 'evening')[]).map((s) => (
             <button key={s} className={reqShift === s ? 'btn-primary' : 'btn-ghost'} onClick={() => setReqShift(s)}>{outlet?.shift_labels?.[s] ?? s}</button>
           ))}
         </div>
