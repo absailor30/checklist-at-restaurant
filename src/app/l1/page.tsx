@@ -662,6 +662,10 @@ function QuestionCard({
   stationNo: number;
   onChange: (partial: Partial<LineCheckAnswer>) => void;
 }) {
+  const setReading = (v: number | null) => {
+    const out = q.kind === 'numeric' && v !== null && !Number.isNaN(v) && !inRange(q, v);
+    onChange({ value: v, yesNo: undefined, ...(out ? { flagged: true } : {}) });
+  };
   // A temperature marked No is outside the acceptable range, so it is flagged automatically.
   const yesNo = (v: YesNoNa) => onChange({ yesNo: v, ...(q.kind === 'temp_check' && v === 'no' ? { flagged: true } : {}) });
   const [showComment, setShowComment] = useState(false);
@@ -691,18 +695,30 @@ function QuestionCard({
       {(q.kind === 'numeric_photo' || q.kind === 'numeric') && (
         <>
           <label htmlFor="temp">Reading {q.unit ?? ''}{q.kind === 'numeric' ? ` — acceptable: ${describeRange(q)}` : ''}</label>
-          <input
-            id="temp"
-            type="number"
-            inputMode="decimal"
-            value={a?.yesNo === 'na' ? '' : (a?.value ?? '')}
-            disabled={a?.yesNo === 'na'}
-            onChange={(e) => {
-              const v = e.target.value === '' ? null : Number(e.target.value);
-              const out = q.kind === 'numeric' && v !== null && !Number.isNaN(v) && !inRange(q, v);
-              onChange({ value: v, yesNo: undefined, ...(out ? { flagged: true } : {}) });
-            }}
-          />
+          {/* iPhone's "decimal" keypad has no minus key, so negative readings (e.g. -5) use the
+              default number keyboard (type=number) plus a +/- button that flips the sign. */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              id="temp"
+              type="number"
+              step="any"
+              style={{ flex: 1 }}
+              value={a?.yesNo === 'na' ? '' : (a?.value ?? '')}
+              disabled={a?.yesNo === 'na'}
+              onChange={(e) => setReading(e.target.value === '' ? null : Number(e.target.value))}
+            />
+            <button
+              type="button"
+              className="btn-ghost"
+              style={{ width: 'auto', padding: '0 16px' }}
+              disabled={a?.yesNo === 'na' || a?.value === null || a?.value === undefined}
+              onClick={() => a?.value !== null && a?.value !== undefined && setReading(-a.value)}
+              aria-label="Switch between positive and negative"
+              title="Switch between positive and negative"
+            >
+              +/−
+            </button>
+          </div>
           {q.kind === 'numeric' && (
             <div className="btn-row" style={{ marginTop: 12 }}>
               <button className={a?.yesNo === 'na' ? 'btn-primary' : 'btn-ghost'}
