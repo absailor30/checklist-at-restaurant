@@ -132,7 +132,7 @@ export async function POST(request: Request) {
       if (!existing) {
         const q = question;
         const description = outOfRange && q
-          ? `${q.prompt}: reading ${a.value}${q.unit ?? ''}, outside ${describeRange(q)}.${a.reason ? ` ${a.reason}` : ''}`
+          ? `${q.prompt}: ${a.value !== null && a.value !== undefined ? `reading ${a.value}${q.unit ?? ''}, ` : 'marked '}outside ${describeRange(q)}.${a.reason ? ` ${a.reason}` : ''}`
           : (q?.prompt ?? questionId);
         await db.from('corrective_actions').insert({
           org_id: session.orgId,

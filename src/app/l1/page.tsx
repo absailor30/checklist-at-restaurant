@@ -662,7 +662,8 @@ function QuestionCard({
   stationNo: number;
   onChange: (partial: Partial<LineCheckAnswer>) => void;
 }) {
-  const yesNo = (v: YesNoNa) => onChange({ yesNo: v });
+  // A temperature marked No is outside the acceptable range, so it is flagged automatically.
+  const yesNo = (v: YesNoNa) => onChange({ yesNo: v, ...(q.kind === 'temp_check' && v === 'no' ? { flagged: true } : {}) });
   const [showComment, setShowComment] = useState(false);
   const [showMedia, setShowMedia] = useState(false);
 
@@ -684,6 +685,8 @@ function QuestionCard({
       ) : (
         <p className="lede">{q.notes}</p>
       ))}
+
+      {q.kind === 'temp_check' && <p className="lede"><strong>Acceptable temperature:</strong> {describeRange(q)}</p>}
 
       {(q.kind === 'numeric_photo' || q.kind === 'numeric') && (
         <>
@@ -797,6 +800,7 @@ function QuestionCard({
 }
 
 function needsPhoto(q: LineCheckQuestion, a: LineCheckAnswer | undefined) {
+  if (q.kind === 'temp_check') return a?.yesNo === 'yes' || a?.yesNo === 'no';
   if (q.kind === 'yes_no_photo_always') return true;
   if (q.kind === 'yes_no_photo_on_no') return a?.yesNo === 'no';
   if (q.kind === 'yes_photo_no_reason') return a?.yesNo === 'yes';

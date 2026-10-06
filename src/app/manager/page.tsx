@@ -944,7 +944,7 @@ function ExceptionsPanel({ exceptions, stationNames }: { exceptions: any[]; stat
         <div key={i} style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
           <div style={{ fontWeight: 600 }}>{e.prompt}</div>
           <div className="desc">
-            {stationNames[e.stationNo - 1] || `Station ${e.stationNo}`} · reading {e.value}{e.unit}, should be {rangeText(e.min, e.max, e.unit)}
+            {stationNames[e.stationNo - 1] || `Station ${e.stationNo}`} · {e.value !== null && e.value !== undefined ? `reading ${e.value}${e.unit}, should be ${rangeText(e.min, e.max, e.unit)}` : `marked outside the acceptable range (${rangeText(e.min, e.max, e.unit)})`}
           </div>
           <div className="desc">{e.reason ? `Corrective action: ${e.reason}` : 'No corrective action recorded.'}</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

@@ -13,7 +13,7 @@ const prefix = process.argv[4] ?? 'bkc';
 
 const stations = parseBakeryLineCheck(fs.readFileSync(file));
 for (const s of stations) {
-  const numeric = s.questions.filter((q) => q.kind === 'numeric').length;
+  const numeric = s.questions.filter((q) => q.kind === 'temp_check').length;
   console.log(`${s.name}: ${s.questions.length} questions (${numeric} temperature readings)`);
 }
 fs.writeFileSync('supabase/seed/bakelore_l1_bank.sql', bankToSql(org, stations, prefix));

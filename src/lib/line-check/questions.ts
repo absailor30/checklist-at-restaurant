@@ -7,6 +7,7 @@ export type QuestionKind =
   | 'yes_no_photo_always'
   | 'numeric_photo'
   | 'numeric'
+  | 'temp_check'
   | 'yes_no_na'
   | 'yes_no_reason_on_no'
   | 'yes_photo_no_reason';

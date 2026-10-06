@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx';
 
 export interface ImportedQuestion {
   prompt: string;
-  kind: 'numeric' | 'yes_no';
+  kind: 'temp_check' | 'yes_no';
   unit: string | null;
   min: number | null;
   max: number | null;
@@ -97,8 +97,8 @@ export function parseBakeryLineCheck(buffer: Buffer | ArrayBuffer): ImportedStat
     const parts = [...head, ...(standard ? [`Standard: ${standard}`] : [])];
 
     station.questions.push({
-      prompt: range ? `${name} — temperature` : `${name} — meets standard?`,
-      kind: range ? 'numeric' : 'yes_no',
+      prompt: range ? `${name} — temperature within range?` : `${name} — meets standard?`,
+      kind: range ? 'temp_check' : 'yes_no',
       unit: range ? '°C' : null,
       min: range?.min ?? null,
       max: range?.max ?? null,
@@ -138,7 +138,7 @@ export function bankToSql(orgName: string, stations: ImportedStation[], slug: st
         ? `${sqlStr(q.notesHead ? `${q.notesHead} · Standard: ` : 'Standard: ')} || std[${stds.indexOf(q.standard) + 1}]`
         : sqlStr(q.notes);
       vals.push(
-        `    (${sqlStr(id)}, 'L1', ${qi + 1}, ${sqlStr(q.kind)}, ${sqlStr(q.prompt)}, ${q.kind === 'yes_no' ? "'yes'" : 'null'}, ${sqlStr(q.unit)}, ${sqlNum(q.min)}, ${sqlNum(q.max)}, ${q.kind === 'numeric'}, false, ${notes}, v_org, ${si + 1}, ${sqlStr(q.yesLabel)})`
+        `    (${sqlStr(id)}, 'L1', ${qi + 1}, ${sqlStr(q.kind)}, ${sqlStr(q.prompt)}, 'yes', ${sqlStr(q.unit)}, ${sqlNum(q.min)}, ${sqlNum(q.max)}, ${q.kind === 'temp_check'}, false, ${notes}, v_org, ${si + 1}, ${sqlStr(q.yesLabel)})`
       );
     });
   });

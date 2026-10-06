@@ -34,8 +34,12 @@ export function describeRange(q: LineCheckQuestion): string {
   return 'the acceptable range';
 }
 
-/** A 'numeric' reading that is outside the question's acceptable range (and not N/A). */
+/**
+ * A temperature outside the acceptable range: a typed 'numeric' reading out of range, or a
+ * 'temp_check' answered No (the staff member judged it out of range). N/A is never out of range.
+ */
 export function isOutOfRange(q: LineCheckQuestion, a: LineCheckAnswer | undefined): boolean {
+  if (q.kind === 'temp_check') return a?.yesNo === 'no';
   if (q.kind !== 'numeric' || !a || a.yesNo === 'na') return false;
   if (a.value === null || a.value === undefined || Number.isNaN(a.value)) return false;
   return !inRange(q, a.value);
@@ -44,6 +48,12 @@ export function isOutOfRange(q: LineCheckQuestion, a: LineCheckAnswer | undefine
 export function evidenceOk(q: LineCheckQuestion, a: LineCheckAnswer | undefined): boolean {
   if (!a) return false;
   if (q.kind === 'numeric' || q.kind === 'numeric_photo') return Boolean(a.photoDataUrl);
+  // Every temperature check needs its photo; a No also needs the corrective action written down.
+  if (q.kind === 'temp_check') {
+    if (a.yesNo === 'yes') return Boolean(a.photoDataUrl);
+    if (a.yesNo === 'no') return Boolean(a.photoDataUrl) && Boolean(a.reason?.trim());
+    return false;
+  }
   if (q.kind === 'yes_no_photo_always') return Boolean(a.photoDataUrl);
   if (q.kind === 'yes_no_photo_on_no') {
     if (a.yesNo === 'no') return Boolean(a.photoDataUrl);
@@ -93,6 +103,7 @@ export function canAdvance(q: LineCheckQuestion, a: LineCheckAnswer | undefined)
   }
   // N/A always needs nothing further — there's nothing to prove.
   if (a.yesNo === 'na') return true;
+  if (q.kind === 'temp_check') return (a.yesNo === 'yes' || a.yesNo === 'no') && evidenceOk(q, a);
   if (q.kind === 'yes_no_na') return a.yesNo === 'yes' || a.yesNo === 'no' || a.yesNo === 'na';
   if (q.kind === 'yes_photo_no_reason') {
     if (a.yesNo === 'yes') return Boolean(a.photoDataUrl);
