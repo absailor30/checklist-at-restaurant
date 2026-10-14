@@ -102,6 +102,9 @@ export default function StaffLineCheckPage() {
   const [stations, setStations] = useState<Record<number, StationState>>({});
   const [active, setActive] = useState<number | null>(null);
   const [pauseDraft, setPauseDraft] = useState('');
+  const [delayed, setDelayed] = useState(false);
+  const [delayReason, setDelayReason] = useState('');
+  const [delaySaved, setDelaySaved] = useState(false);
 
   // --- device setup -------------------------------------------------------
 
@@ -193,7 +196,13 @@ export default function StaffLineCheckPage() {
       let server: Record<number, any> = {};
       try {
         const r = await fetch('/api/l1/line-check/state', { cache: 'no-store' });
-        if (r.ok) server = (await r.json()).stations ?? {};
+        if (r.ok) {
+          const d = await r.json();
+          server = d.stations ?? {};
+          setDelayed(Boolean(d.delayed));
+          setDelayReason(d.delayReason ?? '');
+          setDelaySaved(Boolean(d.delayReason));
+        }
       } catch { /* offline: local drafts still apply */ }
       const merged: Record<number, StationState> = { ...emptyStations(loaded), ...restored };
       for (const bs of loaded.stations) {
@@ -236,6 +245,16 @@ export default function StaffLineCheckPage() {
     } finally {
       setReqBusy(false);
     }
+  }
+
+  async function saveDelayReason() {
+    if (delayReason.trim().length < 3) { setError('Please write a short reason.'); return; }
+    setError(null);
+    const res = await fetch('/api/l1/line-check/delay-reason', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: delayReason.trim() }),
+    });
+    if (res.ok) setDelaySaved(true);
+    else setError((await res.json().catch(() => ({}))).error || 'Could not save the reason.');
   }
 
   function confirmSignOut() {
@@ -335,6 +354,8 @@ export default function StaffLineCheckPage() {
         setError(d.error || 'Failed to sync station');
         return false;
       }
+      const ok = await res.json().catch(() => ({}));
+      if (ok.delayed) setDelayed(true);
       return true;
     } catch (e) {
       setError('Network error syncing station');
@@ -629,6 +650,17 @@ export default function StaffLineCheckPage() {
             <select id="checkTime" value={checkTime} onChange={(e) => setCheckTime(e.target.value)}>
               {TIME_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
+          </div>
+        )}
+
+        {delayed && activeStations.every((s) => stations[s.no]?.status === 'complete') && (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <label htmlFor="delayReason" style={{ marginTop: 0 }}>This check finished after the deadline. Why was it delayed?</label>
+            <textarea id="delayReason" rows={3} value={delayReason} disabled={delaySaved}
+              onChange={(e) => setDelayReason(e.target.value)} placeholder="e.g. short-staffed, delivery arrived late" />
+            {delaySaved
+              ? <p className="lede" style={{ marginTop: 8 }}>Reason saved. L2 and L3 can see it.</p>
+              : <button className="btn-primary" style={{ marginTop: 8 }} onClick={saveDelayReason}>Save reason</button>}
           </div>
         )}
 

@@ -13,7 +13,7 @@ export interface L3ReportRow {
   date: string; outletId: string; outletName: string; shift: string; checkTime: string | null;
   stationsComplete: number; stationCount: number; l1Complete: boolean; outOfRange: number; missed: number;
   percent: number | null; band: string | null; onTime: boolean | null;
-  l2Complete: boolean; l3Complete: boolean;
+  l2Complete: boolean; l3Complete: boolean; delayReason: string | null;
 }
 
 export interface L3Insights {
@@ -66,7 +66,7 @@ export async function buildL3Report(
   const { data: runs, error } = await db
     .from('line_check_runs')
     .select(`
-      id, outlet_id, run_date, shift, check_time, l2_completed_at, l3_completed_at,
+      id, outlet_id, run_date, shift, check_time, l2_completed_at, l3_completed_at, delay_reason,
       line_check_stations (
         station_no, status, completed_at,
         line_check_answers ( question_id, yes_no, value_number, photo_path, reason, out_of_range, correction_photo_path )
@@ -179,6 +179,7 @@ export async function buildL3Report(
       onTime: completed.length > 0 && deadline ? !lateAny : null,
       l2Complete: !!r.l2_completed_at,
       l3Complete: !!r.l3_completed_at,
+      delayReason: r.delay_reason ?? null,
     };
   }).sort((a, b) => a.date === b.date ? a.outletName.localeCompare(b.outletName) : a.date < b.date ? 1 : -1);
 

@@ -2,6 +2,7 @@ import { json } from '@/lib/no-store';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { readSession } from '@/lib/session';
 import { findQuestion, loadBank } from '@/lib/line-check/bank';
+import { finishedAfterDeadline } from '@/lib/line-check/delay';
 import { describeRange, isOutOfRange } from '@/lib/line-check/score-answer';
 
 export const dynamic = 'force-dynamic';
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
   const { data: outlet } = await db.from('outlets').select('timezone, station_count').eq('id', session.outletId).single();
   const tz = outlet?.timezone || 'UTC';
 
-  const bank = await loadBank(db, session.orgId, outlet?.station_count ?? 3);
+  const bank = await loadBank(db, session.orgId, outlet?.station_count ?? 3, shift);
   if (!bank.stations.some((s) => s.no === stationNo)) {
     return json({ error: 'This outlet does not have that many stations.' }, { status: 400 });
   }
@@ -146,5 +147,6 @@ export async function POST(request: Request) {
     }
   }
 
-  return json({ ok: true, runId, stationId });
+  const delayed = status === 'complete' && finishedAfterDeadline(new Date(), runDate, bank.hardStop, tz);
+  return json({ ok: true, runId, stationId, delayed });
 }

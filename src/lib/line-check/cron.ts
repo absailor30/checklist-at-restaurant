@@ -68,7 +68,10 @@ export async function enforceShiftMisses(
   outletId: string,
   runDate: string,
   shift: string,
-  stationCount: number
+  stationCount: number,
+  // false (today): a check that has started is left running and shows as delayed; only stations
+  // nobody started become missed. true (a past day): everything still open becomes missed.
+  final = false
 ) {
   let { data: run } = await db
     .from('line_check_runs')
@@ -99,9 +102,11 @@ export async function enforceShiftMisses(
     const s = have.get(n);
     if (!s) {
       toInsert.push({ run_id: run.id, station_no: n, status: 'missed', pause_reason: 'Never started' });
-    } else if (s.status === 'idle' || s.status === 'in_progress') {
+    } else if (s.status === 'idle') {
+      await db.from('line_check_stations').update({ status: 'missed', pause_reason: 'Never started' }).eq('id', s.id);
+    } else if (final && s.status === 'in_progress') {
       await db.from('line_check_stations').update({ status: 'missed', pause_reason: 'Unfinished at deadline' }).eq('id', s.id);
-    } else if (s.status === 'paused') {
+    } else if (final && s.status === 'paused') {
       await db.from('line_check_stations').update({ status: 'missed' }).eq('id', s.id);
     }
   }
@@ -134,7 +139,7 @@ export async function enforceDueShifts(
         for (const shift of activeShiftsOf(config)) {
           const dl = deadlineFor(config, shift);
           if (!dl || zonedToUtc(date, dl, tz).getTime() > Date.now()) continue;
-          await enforceShiftMisses(db, o.id, date, shift, o.station_count ?? 1);
+          await enforceShiftMisses(db, o.id, date, shift, o.station_count ?? 1, date < today);
         }
       }
     }

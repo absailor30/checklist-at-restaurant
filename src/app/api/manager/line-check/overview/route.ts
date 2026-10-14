@@ -77,6 +77,7 @@ export async function GET(request: Request) {
           check_time,
           l2_completed_at,
           l3_completed_at,
+          delay_reason,
           line_check_stations (
             id,
             station_no,
@@ -104,6 +105,7 @@ export async function GET(request: Request) {
             check_time,
             l2_completed_at,
             l3_completed_at,
+          delay_reason,
             line_check_stations (
               id,
               station_no,

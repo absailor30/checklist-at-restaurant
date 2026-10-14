@@ -739,6 +739,7 @@ export default function ManagerDashboard() {
                     </div>
                   </div>
 
+                  {run.delay_reason && <div className="banner" style={{ marginTop: 8 }}>⏱ Delay reason (L1): {run.delay_reason}</div>}
                   {run.exceptions?.length > 0 && <ExceptionsPanel exceptions={run.exceptions} stationNames={stationNames} />}
 
                   <div className="lockbox">
