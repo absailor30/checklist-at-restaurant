@@ -13,11 +13,12 @@ export async function POST() {
   const userId = manager?.id ?? staff?.userId;
   if (!userId) return json({ error: 'Not signed in.' }, { status: 401 });
 
+  const errors: string[] = [];
   const sent = await pushToUsers(createAdminClient(), [userId], {
     title: 'Test notification',
     body: 'Notifications are working on this device.',
     url: '/l1',
     tag: 'test',
-  });
-  return json({ ok: sent > 0, sent });
+  }, errors);
+  return json({ ok: sent > 0, sent, error: sent > 0 ? undefined : errors.join('; ') || undefined });
 }

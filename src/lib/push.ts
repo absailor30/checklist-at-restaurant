@@ -81,29 +81,36 @@ export interface PushMessage {
 export async function pushToUsers(
   db: SupabaseClient,
   userIds: string[],
-  message: PushMessage
+  message: PushMessage,
+  errors?: string[]
 ): Promise<number> {
   if (!userIds.length) return 0;
 
   let keys;
   try {
     keys = vapidKeys();
-  } catch {
+  } catch (e: any) {
+    errors?.push(`keys: ${e?.message}`);
     return 0; // Push is not configured; in-app notifications still happened.
   }
 
-  webpush.setVapidDetails(
-    process.env.PUSH_CONTACT ?? 'mailto:noreply@example.com',
-    keys.publicKey,
-    keys.privateKey
-  );
+  try {
+    webpush.setVapidDetails(
+      process.env.PUSH_CONTACT ?? 'mailto:noreply@example.com',
+      keys.publicKey,
+      keys.privateKey
+    );
+  } catch (e: any) {
+    errors?.push(`PUSH_CONTACT/keys invalid: ${e?.message}`);
+    return 0;
+  }
 
   const { data: subs } = await db
     .from('push_subscriptions')
     .select('id, endpoint, p256dh, auth')
     .in('user_id', userIds);
 
-  if (!subs?.length) return 0;
+  if (!subs?.length) { errors?.push('no saved devices for this user'); return 0; }
 
   const payload = JSON.stringify(message);
   let sent = 0;
@@ -121,6 +128,7 @@ export async function pushToUsers(
         await db.from('push_subscriptions').delete().eq('id', sub.id);
       } else {
         console.error('push failed', status, e?.body ?? e?.message);
+        errors?.push(`push service said ${status}: ${String(e?.body ?? e?.message).slice(0, 160)}`);
       }
     }
   }));
