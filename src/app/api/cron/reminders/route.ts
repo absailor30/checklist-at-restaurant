@@ -12,7 +12,8 @@ export const maxDuration = 60;
 // each shift's start time (config.shiftStarts, e.g. {"morning":"09:00"}).
 // Each reminder falls in its own 5-minute window, so a 5-minute scheduler hits
 // it once. A shift whose checklist is already complete is skipped.
-const OFFSETS = [60, 15, 5];
+const START_OFFSETS = [60, 15, 5];
+const DEADLINE_OFFSETS = [120, 60, 15, 5];
 const WINDOW = 5;
 
 const minutesOf = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
         const at = kind === 'start' ? starts[shift] : deadlines[shift];
         if (!at) continue;
         const until = minutesOf(at) - now;
-        const offset = OFFSETS.find((o) => until > o - WINDOW && until <= o);
+        const offset = (kind === 'start' ? START_OFFSETS : DEADLINE_OFFSETS).find((o) => until > o - WINDOW && until <= o);
         if (offset === undefined) continue;
 
         // Skip if this shift's checklist is already done.
