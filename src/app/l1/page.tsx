@@ -8,6 +8,7 @@ import { canAdvance, describeRange, inRange, isOutOfRange, scoreAnswer, type Lin
 import { bandOf } from '@/lib/scoring';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { NotificationBell } from '@/components/notifications';
+import { DeadlineCountdown } from '@/components/deadline-countdown';
 import { CameraCapture } from '@/components/camera-capture';
 
 type Step = 'outlet' | 'staff' | 'pin' | 'list' | 'request' | 'requested';
@@ -520,6 +521,7 @@ export default function StaffLineCheckPage() {
             <div className="sub">
               Question {st.index + 1} of {qs.length}{bank?.hardStop ? ` · deadline ${formatCheckTime(bank.hardStop) ?? bank.hardStop}` : ''}
             </div>
+            <DeadlineCountdown deadline={bank?.hardStop} timeZone={outlet?.timezone} />
           </div>
           <button className="btn-ghost" style={{ width: 'auto' }} onClick={() => setActive(null)}>
             Stations
@@ -585,6 +587,7 @@ export default function StaffLineCheckPage() {
             {bank?.hardStop ? ` · deadline ${formatCheckTime(bank.hardStop) ?? bank.hardStop}` : ''}
             {bank?.own ? '' : ' · stations independent'}
           </div>
+          <DeadlineCountdown deadline={bank?.hardStop} timeZone={outlet?.timezone} />
         </header>
 
         <p className="lede">
