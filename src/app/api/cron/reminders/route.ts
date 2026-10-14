@@ -39,8 +39,9 @@ export async function GET(request: Request) {
 
   for (const org of orgs ?? []) {
     const config = (org.line_check_config ?? {}) as any;
-    const starts = config.shiftStarts as Record<string, string> | undefined;
-    if (!starts) continue;
+    const starts = (config.shiftStarts ?? {}) as Record<string, string>;
+    const deadlines = (config.shiftDeadlines ?? {}) as Record<string, string>;
+    if (!config.shiftStarts && !config.shiftDeadlines) continue;
     const labels = (config.shiftLabels ?? {}) as Record<string, string>;
 
     const { data: outlets } = await db.from('outlets')
@@ -52,9 +53,11 @@ export async function GET(request: Request) {
       const today = todayIn(tz);
 
       for (const shift of activeShiftsOf(config)) {
-        const start = starts[shift];
-        if (!start) continue;
-        const until = minutesOf(start) - now;
+       // Two kinds of reminder per shift: before it starts, and before its deadline (only if still unfinished).
+       for (const kind of ['start', 'deadline'] as const) {
+        const at = kind === 'start' ? starts[shift] : deadlines[shift];
+        if (!at) continue;
+        const until = minutesOf(at) - now;
         const offset = OFFSETS.find((o) => until > o - WINDOW && until <= o);
         if (offset === undefined) continue;
 
@@ -69,7 +72,7 @@ export async function GET(request: Request) {
 
         // Send each reminder once: the insert fails on the primary key if it already went out.
         const { error: dup } = await db.from('reminder_log')
-          .insert({ outlet_id: outlet.id, run_date: today, shift, offset_min: offset });
+          .insert({ outlet_id: outlet.id, run_date: today, shift, offset_min: kind === 'start' ? offset : -offset });
         if (dup) continue;
 
         const { data: l1 } = await db.from('user_outlets')
@@ -81,12 +84,15 @@ export async function GET(request: Request) {
 
         const label = labels[shift] ?? shift;
         const n = await pushToUsers(db, ids, {
-          title: `${label} checklist starts in ${offset} min`,
-          body: `${outlet.name}: the ${label} line check starts at ${start}.`,
+          title: kind === 'start' ? `${label} checklist starts in ${offset} min` : `${label} checklist: ${offset} min left`,
+          body: kind === 'start'
+            ? `${outlet.name}: the ${label} line check starts at ${at}.`
+            : `${outlet.name}: finish the ${label} line check before the ${at} deadline.`,
           url: '/l1',
-          tag: `start-${outlet.id}-${shift}`,
+          tag: `${kind}-${outlet.id}-${shift}`,
         });
-        sent.push(`${outlet.name} ${label} ${offset}min -> ${n}`);
+        sent.push(`${outlet.name} ${label} ${kind} ${offset}min -> ${n}`);
+       }
       }
     }
   }
