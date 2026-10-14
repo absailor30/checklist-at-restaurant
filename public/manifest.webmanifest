@@ -1,12 +1,24 @@
 {
-  "name": "Restaurant Checklist",
-  "short_name": "Checklist",
-  "start_url": "/staff",
+  "name": "Bakelore Checklist",
+  "short_name": "Bakelore",
+  "start_url": "/l1",
   "display": "standalone",
   "background_color": "#f6f4f1",
   "theme_color": "#b4451f",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
-  ]
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "id": "/l1",
+  "scope": "/"
 }

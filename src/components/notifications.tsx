@@ -66,6 +66,15 @@ export function NotificationBell() {
       const registration = await navigator.serviceWorker.getRegistration();
       const existing = await registration?.pushManager.getSubscription();
       setPush(existing ? 'on' : 'off');
+      // Re-register this device under the signed-in user each visit, so a
+      // phone shared between shifts keeps receiving alerts.
+      if (existing) {
+        void fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription: existing }),
+        }).catch(() => {});
+      }
     })().catch(() => setPush('unsupported'));
   }, []);
 
@@ -107,6 +116,17 @@ export function NotificationBell() {
     } catch (e: any) {
       setError(e?.message ?? 'Could not turn on notifications for this device.');
       setPush('off');
+    }
+  }
+
+  async function sendTest() {
+    setError(null);
+    try {
+      const res = await fetch('/api/push/test', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) setError(data.error ?? 'No notification was delivered. Turn notifications off and on again.');
+    } catch {
+      setError('Could not send the test notification.');
     }
   }
 
@@ -189,6 +209,9 @@ export function NotificationBell() {
                       ? 'This browser cannot deliver notifications when the app is closed.'
                       : 'Get alerted even when the app is closed — useful once you have left the restaurant.'}
               </p>
+              {push === 'on' && (
+                <button className="btn-ghost" onClick={sendTest}>Send test notification</button>
+              )}
               {push === 'on' && (
                 <button className="btn-ghost" onClick={disablePush}>Turn off on this device</button>
               )}
