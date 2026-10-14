@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.checklist.checklistify",
+      "sha256_cert_fingerprints": ["E9:82:21:84:37:A0:3F:B4:E3:EE:3C:67:16:DA:66:3F:FA:C0:23:B6:FB:4A:73:1A:E9:E9:CE:32:BD:61:C3:9E"]
+    }
+  }
+]
