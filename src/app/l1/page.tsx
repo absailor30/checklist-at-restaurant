@@ -314,6 +314,15 @@ export default function StaffLineCheckPage() {
 
   function openStation(id: number) {
     setError(null);
+    // Tell the server this station is under way (best effort), so L2/L3 and the "check delayed" alert know a check is going on.
+    if (stations[id]?.status === 'idle' || stations[id]?.status === 'paused') {
+      const form = new FormData();
+      form.append('stationNo', id.toString());
+      form.append('status', 'in_progress');
+      if (bank?.askCheckTime && checkTime) form.append('checkTime', checkTime);
+      form.append('answers', '[]');
+      void fetch('/api/l1/line-check/sync', { method: 'POST', body: form }).catch(() => {});
+    }
     patch(id, (s) => ({
       ...s,
       status: s.status === 'complete' ? 'complete' : 'in_progress',

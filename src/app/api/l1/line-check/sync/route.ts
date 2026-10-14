@@ -58,6 +58,13 @@ export async function POST(request: Request) {
 
   const runId = run.id;
 
+  // Merely opening a station must never reopen one that is already complete.
+  if (status === 'in_progress') {
+    const { data: existing } = await db.from('line_check_stations').select('status')
+      .eq('run_id', runId).eq('station_no', stationNo).maybeSingle();
+    if (existing?.status === 'complete') return json({ ok: true, runId, unchanged: true });
+  }
+
   // Upsert the station
   const updatePayload: any = { status, pause_reason: pauseReason };
   if (status === 'complete') updatePayload.completed_at = new Date().toISOString();

@@ -110,7 +110,7 @@ export async function GET(request: Request) {
 
         for (const d of due) {
           if (finished) continue;
-          if (d.kind === 'delayed' && going === 0) continue; // nothing started: that is "missed", not "delayed"
+          if (d.kind === 'delayed' && going + complete === 0) continue; // nothing started: that is "missed", not "delayed"
 
           // Send each reminder once: the insert fails on the primary key if it already went out.
           const { error: dup } = await db.from('reminder_log')

@@ -8,7 +8,7 @@ import { finishedAfterDeadline } from '@/lib/line-check/delay';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// Today's saved paused and completed stations for this outlet and shift, so
+// Today's saved paused, in-progress and completed stations for this outlet and shift, so
 // whoever signs in next sees them and carries on rather than starting over.
 export async function GET() {
   const session = await readSession();
@@ -26,7 +26,7 @@ export async function GET() {
 
   const { data: rows } = await db.from('line_check_stations')
     .select('station_no, status, pause_reason, completed_at, line_check_answers(question_id, yes_no, value_number, reason, flagged, photo_path, correction_photo_path, ai_verified, ai_note)')
-    .eq('run_id', run.id).in('status', ['paused', 'complete']);
+    .eq('run_id', run.id).in('status', ['paused', 'in_progress', 'complete']);
 
   const sign = async (path: string | null) => {
     if (!path) return null;
