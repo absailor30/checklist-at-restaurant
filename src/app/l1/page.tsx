@@ -189,7 +189,25 @@ export default function StaffLineCheckPage() {
         const saved = localStorage.getItem(draftKey(outlet.id, person.id));
         if (saved) restored = JSON.parse(saved);
       } catch { /* corrupt or missing draft, start fresh */ }
-      setStations({ ...emptyStations(loaded), ...restored });
+      // Paused and completed stations saved on the server (by anyone on this shift today) come back too.
+      let server: Record<number, any> = {};
+      try {
+        const r = await fetch('/api/l1/line-check/state', { cache: 'no-store' });
+        if (r.ok) server = (await r.json()).stations ?? {};
+      } catch { /* offline: local drafts still apply */ }
+      const merged: Record<number, StationState> = { ...emptyStations(loaded), ...restored };
+      for (const bs of loaded.stations) {
+        const srv = server[bs.no];
+        if (!srv) continue;
+        const local = restored[bs.no];
+        const localHasWork = Boolean(local && Object.keys(local.answers ?? {}).length > 0);
+        // A finished station wins; otherwise this person's own newer draft wins; otherwise the saved pause.
+        if (srv.status === 'complete' || !localHasWork) {
+          const firstOpen = bs.questions.findIndex((q) => srv.answers?.[q.id]?.yesNo == null && srv.answers?.[q.id]?.value == null);
+          merged[bs.no] = { status: srv.status, pauseReason: srv.pauseReason ?? '', index: Math.max(0, firstOpen), answers: srv.answers ?? {} };
+        }
+      }
+      setStations(merged);
       let savedTime: string | null = null;
       try { savedTime = localStorage.getItem(`${draftKey(outlet.id, person.id)}.time`); } catch { /* ignore */ }
       setCheckTime(savedTime || defaultCheckTime(person.shift));
@@ -220,11 +238,21 @@ export default function StaffLineCheckPage() {
     }
   }
 
+  function confirmSignOut() {
+    const left = bank ? bank.stations.filter((st) => stations[st.no]?.status !== 'complete').length : 0;
+    if (left > 0) {
+      const ok = window.confirm(
+        `${left} station${left === 1 ? ' is' : 's are'} not finished.\n\nEverything you entered is saved and will be here when you sign back in. ` +
+        `To hand a station over to someone else, use "Pause" and give a reason.\n\nSign out now?`
+      );
+      if (!ok) return;
+    }
+    void signOut();
+  }
+
   async function signOut() {
     await fetch('/api/l1/logout', { method: 'POST' });
-    if (outlet && person) {
-      try { localStorage.removeItem(draftKey(outlet.id, person.id)); } catch { /* ignore */ }
-    }
+    // The local draft is kept on purpose: the same person signing back in resumes where they left off.
     setPerson(null); setPin(''); setMe(null);
     setStations({});
     setBank(null);
@@ -575,7 +603,7 @@ export default function StaffLineCheckPage() {
         <div className="bellrow">
           <NotificationBell />
           <button className="btn-ghost" style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }}
-            onClick={signOut}>Done</button>
+            onClick={confirmSignOut}>Sign out</button>
         </div>
       </div>
 
