@@ -67,6 +67,11 @@ export async function GET(request: Request) {
           if ((count ?? 0) >= (outlet.station_count ?? 1)) continue;
         }
 
+        // Send each reminder once: the insert fails on the primary key if it already went out.
+        const { error: dup } = await db.from('reminder_log')
+          .insert({ outlet_id: outlet.id, run_date: today, shift, offset_min: offset });
+        if (dup) continue;
+
         const { data: l1 } = await db.from('user_outlets')
           .select('users!inner(id, is_active, roles!inner(level))').eq('outlet_id', outlet.id);
         const ids = (l1 ?? [])
