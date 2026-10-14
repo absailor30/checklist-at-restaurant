@@ -54,7 +54,7 @@ export async function GET(request: Request) {
       const today = todayIn(tz);
 
       for (const shift of activeShiftsOf(config)) {
-       // Two kinds of reminder per shift: before it starts, and before its deadline (only if still unfinished).
+       // Two kinds of reminder per shift: before it starts (L1 only), and before its deadline while unfinished (L1, L2 and L3).
        for (const kind of ['start', 'deadline'] as const) {
         const at = kind === 'start' ? starts[shift] : deadlines[shift];
         if (!at) continue;
@@ -80,7 +80,7 @@ export async function GET(request: Request) {
           .select('users!inner(id, is_active, roles!inner(level))').eq('outlet_id', outlet.id);
         const ids = (l1 ?? [])
           .map((r: any) => (Array.isArray(r.users) ? r.users[0] : r.users))
-          .filter((u: any) => u?.is_active && (Array.isArray(u.roles) ? u.roles[0] : u.roles)?.level === 1)
+          .filter((u: any) => u?.is_active && (kind === 'deadline' || (Array.isArray(u.roles) ? u.roles[0] : u.roles)?.level === 1))
           .map((u: any) => u.id);
 
         const label = labels[shift] ?? shift;
