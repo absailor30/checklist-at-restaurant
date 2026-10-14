@@ -8,10 +8,13 @@ export function CameraCapture({
   onCapture,
   onClose,
   disabled,
+  compact,
 }: {
   onCapture: (file: File) => void;
   onClose: () => void;
   disabled?: boolean;
+  /** Smaller file (long edge 1280px, quality 0.7) for routine photos; omit to keep full quality. */
+  compact?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -38,8 +41,9 @@ export function CameraCapture({
     const video = videoRef.current;
     if (!video || !video.videoWidth) return;
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    const scale = compact ? Math.min(1, 1280 / Math.max(video.videoWidth, video.videoHeight)) : 1;
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -47,7 +51,7 @@ export function CameraCapture({
       if (!blob) return;
       const file = new File([blob], `capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
       onCapture(file);
-    }, 'image/jpeg', 0.9);
+    }, 'image/jpeg', compact ? 0.7 : 0.9);
   };
 
   return (

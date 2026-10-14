@@ -807,6 +807,7 @@ function QuestionCard({
           value={a?.photoDataUrl}
           questionId={q.id}
           stationNo={stationNo}
+          keepQuality={outOfRange}
           onUploaded={(photoDataUrl, photoPath, aiVerified, aiNote) => onChange({ photoDataUrl, photoPath, aiVerified, aiNote })}
           required={mediaRequired}
         />
@@ -847,6 +848,7 @@ function PhotoField({
   required,
   label,
   correction,
+  keepQuality,
 }: {
   value?: string | null;
   questionId: string;
@@ -856,6 +858,8 @@ function PhotoField({
   label?: string;
   /** The optional second photo taken after a corrective action. */
   correction?: boolean;
+  /** Evidence of a failure: keep full quality. Routine passing photos are compressed. */
+  keepQuality?: boolean;
 }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -893,7 +897,7 @@ function PhotoField({
           {value ? 'Retake photo' : 'Take photo'}
         </button>
       </div>
-      {cameraOpen && <CameraCapture disabled={uploading} onCapture={handleCapture} onClose={() => setCameraOpen(false)} />}
+      {cameraOpen && <CameraCapture compact={!keepQuality && !correction} disabled={uploading} onCapture={handleCapture} onClose={() => setCameraOpen(false)} />}
       {uploading && <p className="lede">Uploading…</p>}
       {uploadError && <p className="lede" style={{ color: 'var(--locked)' }}>{uploadError}</p>}
       {value && <img className="preview" src={value} alt="Attached evidence" />}

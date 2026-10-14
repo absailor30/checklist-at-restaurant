@@ -6,6 +6,7 @@ import { notify, recipientsForLock } from '@/lib/notify';
 import { todayIn, zonedToUtc } from '@/lib/time';
 import { deadlineFor, hardStopOf } from '@/lib/line-check/bank';
 import { activeShiftsOf } from '@/lib/line-check/shifts';
+import { purgeOldPhotos } from '@/lib/photo-retention';
 import { enforceLineCheckMisses, enforceShiftMisses } from '@/lib/line-check/cron';
 
 export const dynamic = 'force-dynamic';
@@ -132,7 +133,8 @@ export async function GET(request: Request) {
     }
   }
 
-  return json({ ok: true, ms: Date.now() - startedAt, ...summary });
+  const photosRemoved = await purgeOldPhotos(db);
+  return json({ ok: true, ms: Date.now() - startedAt, photosRemoved, ...summary });
 }
 
 // Vercel Cron sends `Authorization: Bearer <CRON_SECRET>` when that variable is
