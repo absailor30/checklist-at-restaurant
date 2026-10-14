@@ -9,6 +9,10 @@ import { encodeSession, sessionCookie } from '@/lib/session';
 // fails because no configuration or request exists yet.
 export const dynamic = 'force-dynamic';
 
+// Opening (morning) first, then afternoon, then Closing (evening); no shift last.
+const SHIFT_ORDER = ['morning', 'afternoon', 'evening'];
+const shiftRank = (s: string | null) => { const i = SHIFT_ORDER.indexOf(s ?? ''); return i === -1 ? 9 : i; };
+
 // GET: the staff picker for one outlet. Names only — never PIN hashes.
 export async function GET(request: Request) {
   const outletId = new URL(request.url).searchParams.get('outletId');
@@ -43,7 +47,7 @@ export async function GET(request: Request) {
         needsPin: !u.pin_set_at,
       };
     })
-    .sort((a: any, b: any) => a.level - b.level || a.name.localeCompare(b.name));
+    .sort((a: any, b: any) => a.level - b.level || shiftRank(a.shift) - shiftRank(b.shift) || a.name.localeCompare(b.name));
 
   return json({ staff });
 }
