@@ -411,7 +411,7 @@ export default function StaffLineCheckPage() {
             <span>
               <span className="name">{s.name}</span>
               <span className="meta">
-                {s.role}{s.shift ? ` · ${s.shift} shift` : ''}{s.needsPin ? ' · set your PIN' : ''}
+                {s.role}{s.shift ? ` · ${outlet?.shift_labels?.[s.shift] ?? s.shift} shift` : ''}{s.needsPin ? ' · set your PIN' : ''}
               </span>
             </span>
             <span className="chev">›</span>
