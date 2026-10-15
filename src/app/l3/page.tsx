@@ -14,6 +14,7 @@ interface Row {
 }
 interface Report {
   insights?: import('@/lib/l3-report').L3Insights;
+  selectedOutletId?: string | null;
   orgName: string;
   outlets: { id: string; name: string }[];
   rows: Row[];
@@ -31,15 +32,29 @@ export default function L3ReportPage() {
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState('');
 
-  const [days, setDays] = useState(7);
+  type Range = { kind: 'days' | 'yesterday' | 'all' | 'custom'; days?: number; from?: string; to?: string };
+  const [range, setRange] = useState<Range>({ kind: 'days', days: 7 });
+  const [outletId, setOutletId] = useState('');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+
+  const query = useCallback((r: Range, outlet: string) => {
+    const q = new URLSearchParams();
+    if (r.kind === 'days') q.set('days', String(r.days ?? 7));
+    if (r.kind === 'yesterday') q.set('yesterday', '1');
+    if (r.kind === 'all') q.set('all', '1');
+    if (r.kind === 'custom' && r.from && r.to) { q.set('from', r.from); q.set('to', r.to); }
+    if (outlet) q.set('outletId', outlet);
+    return q.toString();
+  }, []);
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const fetchReport = useCallback(async (d: number) => {
+  const fetchReport = useCallback(async (r: Range, outlet: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/l3/report?days=${d}`);
+      const res = await fetch(`/api/l3/report?${query(r, outlet)}`);
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
       setError(''); setReport(data);
@@ -53,11 +68,11 @@ export default function L3ReportPage() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSessionState(session ? 'in' : 'out');
-      if (session) void fetchReport(days);
+      if (session) void fetchReport(range, outletId);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setSessionState(session ? 'in' : 'out');
-      if (session) void fetchReport(days);
+      if (session) void fetchReport(range, outletId);
     });
     return () => subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -73,10 +88,26 @@ export default function L3ReportPage() {
 
   async function handleLogout() { await supabase.auth.signOut(); }
 
-  function changeDays(d: number) {
-    setDays(d);
-    void fetchReport(d);
+  function pick(r: Range) {
+    setRange(r);
+    void fetchReport(r, outletId);
   }
+  function pickOutlet(id: string) {
+    setOutletId(id);
+    void fetchReport(range, id);
+  }
+  const PRESETS: { label: string; r: Range }[] = [
+    { label: 'Today', r: { kind: 'days', days: 1 } },
+    { label: 'Yesterday', r: { kind: 'yesterday' } },
+    { label: '7 days', r: { kind: 'days', days: 7 } },
+    { label: '14 days', r: { kind: 'days', days: 14 } },
+    { label: '30 days', r: { kind: 'days', days: 30 } },
+    { label: '60 days', r: { kind: 'days', days: 60 } },
+    { label: '90 days', r: { kind: 'days', days: 90 } },
+    { label: 'All time', r: { kind: 'all' } },
+  ];
+  const sameRange = (a: Range, b: Range) => a.kind === b.kind && a.days === b.days;
+  const exportQuery = query(range, outletId);
 
   if (sessionState === 'checking') return <div className="shell" style={{ paddingTop: 32 }}><div className="spinner" /></div>;
 
@@ -128,26 +159,45 @@ export default function L3ReportPage() {
           </div>
         )}
 
-        <div className="btn-row" style={{ marginBottom: 16 }}>
-          {[7, 14, 30].map((d) => (
-            <button key={d} className={days === d ? 'btn-primary' : 'btn-ghost'} onClick={() => changeDays(d)}>
-              {d} days
-            </button>
+        {report && report.outlets.length > 1 && (
+          <select value={outletId} onChange={(e) => pickOutlet(e.target.value)} style={{ marginBottom: 12 }}>
+            <option value="">All outlets</option>
+            {report.outlets.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          {PRESETS.map((p) => (
+            <button key={p.label} className={sameRange(range, p.r) ? 'btn-primary' : 'btn-ghost'}
+              style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }} onClick={() => pick(p.r)}>{p.label}</button>
           ))}
-          <a className="btn btn-ghost" href={`/api/l3/export?days=${days}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
-            Export CSV
-          </a>
-          <a className="btn btn-ghost" href="/manager/fssai-audit" style={{ textAlign: 'center', textDecoration: 'none' }}>
-            FSSAI Audit
-          </a>
-          <a className="btn btn-ghost" href={`/api/l3/export/pdf?days=${days}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
-            Export PDF
-          </a>
+          <button className={range.kind === 'custom' ? 'btn-primary' : 'btn-ghost'}
+            style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }} onClick={() => setRange({ kind: 'custom', from: customFrom, to: customTo })}>Custom dates</button>
         </div>
 
-        {!loading && report?.insights && <L3Insights i={report.insights} />}
+        {range.kind === 'custom' && (
+          <div className="card" style={{ boxShadow: 'none', marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div><label style={{ marginTop: 0 }}>From</label><input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} /></div>
+            <div><label style={{ marginTop: 0 }}>To</label><input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} /></div>
+            <button className="btn-primary" style={{ width: 'auto' }} disabled={!customFrom || !customTo}
+              onClick={() => pick({ kind: 'custom', from: customFrom, to: customTo })}>Show</button>
+          </div>
+        )}
 
-        {!loading && report && <L3Charts rows={report.rows} />}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+          <a className="btn btn-ghost" href={`/api/l3/export?${exportQuery}`} style={{ textAlign: 'center', textDecoration: 'none' }}>Export CSV</a>
+          <a className="btn btn-ghost" href={`/api/l3/export/pdf?${exportQuery}`} style={{ textAlign: 'center', textDecoration: 'none' }}>Export PDF</a>
+          <a className="btn btn-ghost" href="/manager/fssai-audit" style={{ textAlign: 'center', textDecoration: 'none' }}>FSSAI Audit</a>
+        </div>
+
+        {!loading && report?.insights && <L3Insights i={report.insights} onPickOutlet={pickOutlet} />}
+
+        {!loading && report && (
+          <details style={{ marginBottom: 16 }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 600, marginBottom: 8 }}>Classic charts</summary>
+            <L3Charts rows={report.rows} />
+          </details>
+        )}
 
         {loading ? <div className="spinner" /> : (
           <div style={{ overflowX: 'auto' }}>
@@ -160,7 +210,7 @@ export default function L3ReportPage() {
                 </tr>
               </thead>
               <tbody>
-                {(report?.rows ?? []).map((r, i) => (
+                {(report?.rows ?? []).slice(0, 200).map((r, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '6px 8px' }}>{r.date}</td>
                     <td style={{ padding: '6px 8px' }}>{r.outletName}</td>

@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { currentManager } from '@/lib/supabase/server';
-import { buildL3Report } from '@/lib/l3-report';
+import { buildL3Report, parseRange } from '@/lib/l3-report';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 export const dynamic = 'force-dynamic';
@@ -14,9 +14,9 @@ export async function GET(request: Request) {
   if (!manager.canManage) return new Response('L3 owner access required.', { status: 403 });
 
   const url = new URL(request.url);
-  const days = Math.min(Math.max(Number(url.searchParams.get('days') ?? 7), 1), 30);
+  const range = parseRange(url);
 
-  const report = await buildL3Report(createAdminClient(), manager, days);
+  const report = await buildL3Report(createAdminClient(), manager, range);
 
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);

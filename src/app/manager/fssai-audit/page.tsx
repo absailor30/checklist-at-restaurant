@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { loginEmail } from '@/lib/login-id';
+import { CameraCapture } from '@/components/camera-capture';
 
-interface Q { id: string; prompt: string; notes: string | null; section: string | null }
-type Ans = { yesNo: string | null; comment: string | null };
+interface Q { id: string; prompt: string; notes: string | null; section: string | null; photoRequired?: boolean }
+type Ans = { yesNo: string | null; comment: string | null; photoPath?: string | null; flagged?: boolean };
 interface Data {
   level: number; outlets: { id: string; name: string }[]; outletId: string; outletName: string;
   period: string; currentPeriod: string; questions: Q[];
@@ -29,6 +30,14 @@ export default function AuditPage() {
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
   const dirty = useRef(false);
+  const [qIndex, setQIndex] = useState(0);
+  const [showComment, setShowComment] = useState<Set<string>>(new Set());
+  const [showMedia, setShowMedia] = useState<Set<string>>(new Set());
+  const [cameraFor, setCameraFor] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const jumped = useRef(false);
+  const fetching = useRef(new Set<string>());
 
   const load = useCallback(async (outletId?: string, period?: string) => {
     const qs = new URLSearchParams();
@@ -38,6 +47,8 @@ export default function AuditPage() {
     const d = await res.json();
     if (!res.ok) { setError(d.error ?? 'Could not load the audit.'); return; }
     setError(''); dirty.current = false; setData(d); setAnswers(d.answers ?? {});
+    const first = (d.questions as Q[]).findIndex((q) => !d.answers?.[q.id]?.yesNo);
+    setQIndex(first === -1 ? 0 : first); jumped.current = true;
   }, []);
 
   useEffect(() => {
@@ -83,6 +94,34 @@ export default function AuditPage() {
     setSaved('');
     setAnswers((prev) => ({ ...prev, [id]: { ...(prev[id] ?? { yesNo: null, comment: null }), ...partial } }));
   };
+
+  async function showPhoto(path: string) {
+    if (urls[path] || fetching.current.has(path)) return;
+    fetching.current.add(path);
+    try {
+      const res = await fetch(`/api/manager/line-check/photo-url?path=${encodeURIComponent(path)}`);
+      const d = await res.json();
+      if (res.ok) setUrls((u) => ({ ...u, [path]: d.url }));
+    } catch { /* the photo just does not preview */ }
+  }
+
+  async function uploadPhoto(q: Q, file: File) {
+    if (!data) return;
+    setCameraFor(null); setUploading(true); setError('');
+    try {
+      const form = new FormData();
+      form.append('file', file); form.append('questionId', q.id); form.append('outletId', data.outletId);
+      const res = await fetch('/api/audit/photo', { method: 'POST', body: form });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Photo upload failed.');
+      setAns(q.id, { photoPath: d.photoPath });
+      setUrls((u) => ({ ...u, [d.photoPath]: URL.createObjectURL(file) }));
+    } catch (e: any) {
+      setError(e.message || 'Photo upload failed.');
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function login(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setLoginError('');
@@ -165,27 +204,81 @@ export default function AuditPage() {
           </div>
         )}
 
-        {sections.map((s) => (
+        {editable && questions.length > 0 && (() => {
+          const q = questions[Math.min(qIndex, questions.length - 1)];
+          const a = answers[q.id] ?? { yesNo: null, comment: null };
+          const isLast = qIndex >= questions.length - 1;
+          const commentOpen = showComment.has(q.id) || Boolean(a.comment);
+          const mediaOpen = showMedia.has(q.id) || Boolean(a.photoPath) || Boolean(q.photoRequired);
+          const needsPhoto = Boolean(q.photoRequired) && a.yesNo !== 'na' && !a.photoPath;
+          const canGo = Boolean(a.yesNo) && !needsPhoto && !uploading;
+          if (a.photoPath) void showPhoto(a.photoPath);
+          return (
+            <div className="card" key={q.id}>
+              <div className="tag plain">Q{qIndex + 1} of {questions.length}</div>
+              {q.section && <div className="desc" style={{ marginTop: 8, fontWeight: 600 }}>{q.section}</div>}
+              <h2 style={{ marginTop: 10, fontSize: 16 }}>{q.prompt}</h2>
+              {q.notes && <p className="desc" style={{ marginTop: 6 }}>{q.notes}</p>}
+              <div className="btn-row" style={{ marginTop: 12 }}>
+                {(['yes', 'no', 'na'] as const).map((v) => (
+                  <button key={v} className={a.yesNo === v ? 'btn-primary' : 'btn-ghost'} onClick={() => setAns(q.id, { yesNo: v })}>
+                    {v === 'na' ? 'N/A' : v === 'yes' ? 'Yes' : 'No'}
+                  </button>
+                ))}
+              </div>
+              <div className="btn-row" style={{ marginTop: 12 }}>
+                <button type="button" className={commentOpen ? 'btn-primary' : 'btn-ghost'} onClick={() => setShowComment((p) => new Set(p).add(q.id))}>💬 Comments / Corrective actions</button>
+                <button type="button" className={mediaOpen ? 'btn-primary' : 'btn-ghost'} onClick={() => setShowMedia((p) => new Set(p).add(q.id))}>📎 Media</button>
+                <button type="button" className={a.flagged ? 'btn-primary' : 'btn-ghost'} onClick={() => setAns(q.id, { flagged: !a.flagged })}>🚩 Flag</button>
+              </div>
+              {commentOpen && (
+                <textarea style={{ marginTop: 12 }} value={a.comment ?? ''} placeholder="Comments / Corrective actions (if applicable)"
+                  onChange={(e) => setAns(q.id, { comment: e.target.value })} />
+              )}
+              {mediaOpen && (
+                <div style={{ marginTop: 12 }}>
+                  <label style={{ marginTop: 0 }}>Photo {q.photoRequired ? '(required)' : '(optional)'}</label>
+                  <button type="button" className="btn-ghost" disabled={uploading} onClick={() => setCameraFor(q.id)}>
+                    {a.photoPath ? 'Retake photo' : 'Take photo'}
+                  </button>
+                  {uploading && <p className="lede">Uploading…</p>}
+                  {a.photoPath && urls[a.photoPath] && <img className="preview" src={urls[a.photoPath]} alt="Attached evidence" />}
+                  {cameraFor === q.id && (
+                    <CameraCapture compact={a.yesNo !== 'no'} onCapture={(f) => void uploadPhoto(q, f)} onClose={() => setCameraFor(null)} />
+                  )}
+                </div>
+              )}
+              {needsPhoto && <p className="lede" style={{ color: 'var(--locked)', marginTop: 8 }}>A photo is required for this question (or choose N/A).</p>}
+              <div className="btn-row" style={{ marginTop: 20 }}>
+                <button className="btn-ghost" disabled={qIndex === 0} onClick={() => setQIndex((i) => Math.max(0, i - 1))}>Back</button>
+                {isLast ? (
+                  <button className="btn-primary" disabled={!canGo || answered < questions.length}
+                    onClick={() => { if (window.confirm('Complete this month\'s FSSAI audit? You will not be able to change it afterwards.')) void save(true); }}>
+                    Complete audit
+                  </button>
+                ) : (
+                  <button className="btn-primary" disabled={!canGo} onClick={() => setQIndex((i) => i + 1)}>Next</button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {!editable && sections.map((s) => (
           <section key={s.name} style={{ marginBottom: 8 }}>
             <h3 style={{ margin: '16px 0 8px' }}>{s.name}</h3>
             {s.qs.map((q) => {
               const a = answers[q.id];
+              if (a?.photoPath) void showPhoto(a.photoPath);
               return (
                 <div key={q.id} className="card" style={{ marginBottom: 10, boxShadow: 'none' }}>
-                  <div style={{ fontWeight: 600 }}>{q.prompt}</div>
+                  <div style={{ fontWeight: 600 }}>{q.prompt}{a?.flagged ? ' 🚩' : ''}</div>
                   {q.notes && <div className="desc" style={{ marginTop: 4 }}>{q.notes}</div>}
-                  <div className="btn-row" style={{ marginTop: 10 }}>
-                    {(['yes', 'no', 'na'] as const).map((v) => (
-                      <button key={v} type="button" disabled={!editable}
-                        className={a?.yesNo === v ? 'btn-primary' : 'btn-ghost'} onClick={() => setAns(q.id, { yesNo: v })}>
-                        {v === 'na' ? 'N/A' : v === 'yes' ? 'Yes' : 'No'}
-                      </button>
-                    ))}
+                  <div style={{ marginTop: 8, fontWeight: 700, color: a?.yesNo === 'no' ? 'var(--locked)' : undefined }}>
+                    {a?.yesNo === 'yes' ? 'Yes' : a?.yesNo === 'no' ? 'No' : a?.yesNo === 'na' ? 'N/A' : '—'}
                   </div>
-                  {(editable || a?.comment) && (a?.yesNo === 'no' || a?.comment) && (
-                    <textarea style={{ marginTop: 10 }} disabled={!editable} value={a?.comment ?? ''}
-                      placeholder="Comments / Corrective actions" onChange={(e) => setAns(q.id, { comment: e.target.value })} />
-                  )}
+                  {a?.comment && <div className="desc" style={{ marginTop: 4 }}>{a.comment}</div>}
+                  {a?.photoPath && urls[a.photoPath] && <img className="preview" src={urls[a.photoPath]} alt="Evidence" />}
                 </div>
               );
             })}
@@ -195,10 +288,6 @@ export default function AuditPage() {
         {editable && (
           <div className="btn-row" style={{ margin: '16px 0' }}>
             <button className="btn-ghost" onClick={() => save(false)}>Save progress</button>
-            <button className="btn-primary" disabled={answered < questions.length}
-              onClick={() => { if (window.confirm('Complete this month\'s FSSAI audit? You will not be able to change it afterwards.')) void save(true); }}>
-              Complete audit
-            </button>
           </div>
         )}
         {saved && <p className="lede">{saved}</p>}

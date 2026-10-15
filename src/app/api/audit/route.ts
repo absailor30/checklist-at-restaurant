@@ -13,10 +13,10 @@ async function questionsFor(db: ReturnType<typeof createAdminClient>, orgId: str
   const { data: org } = await db.from('organisations').select('line_check_config').eq('id', orgId).maybeSingle();
   const ownL2 = Boolean((org?.line_check_config as any)?.l2OwnBank);
   const { data } = await db.from('line_check_questions')
-    .select('id, prompt, notes, section, sort_order, org_id')
+    .select('id, prompt, notes, section, sort_order, org_id, photo_required')
     .eq('level', 'L2').or(`org_id.is.null,org_id.eq.${orgId}`).order('sort_order');
   return (data ?? []).filter((q: any) => !(ownL2 && q.org_id === null))
-    .map((q: any) => ({ id: q.id, prompt: q.prompt, notes: q.notes, section: q.section }));
+    .map((q: any) => ({ id: q.id, prompt: q.prompt, notes: q.notes, section: q.section, photoRequired: Boolean(q.photo_required) }));
 }
 
 export async function GET(request: Request) {
@@ -36,11 +36,11 @@ export async function GET(request: Request) {
 
   const { data: audit } = await db.from('audits').select('id, status, score, completed_at, auditor_id, period')
     .eq('outlet_id', outlet.id).eq('period', period).maybeSingle();
-  let answers: Record<string, { yesNo: string | null; comment: string | null }> = {};
+  let answers: Record<string, { yesNo: string | null; comment: string | null; photoPath: string | null; flagged: boolean }> = {};
   let auditorName: string | null = null;
   if (audit) {
-    const { data: rows } = await db.from('audit_answers').select('question_id, yes_no, comment').eq('audit_id', audit.id);
-    for (const r of rows ?? []) answers[r.question_id] = { yesNo: r.yes_no, comment: r.comment };
+    const { data: rows } = await db.from('audit_answers').select('question_id, yes_no, comment, photo_path, flagged').eq('audit_id', audit.id);
+    for (const r of rows ?? []) answers[r.question_id] = { yesNo: r.yes_no, comment: r.comment, photoPath: r.photo_path, flagged: Boolean(r.flagged) };
     if (audit.auditor_id) {
       const { data: u } = await db.from('users').select('name').eq('id', audit.auditor_id).maybeSingle();
       auditorName = u?.name ?? null;
@@ -83,16 +83,25 @@ export async function POST(request: Request) {
     audit = created;
   }
 
-  const incoming = (body.answers ?? {}) as Record<string, { yesNo?: string; comment?: string }>;
+  const incoming = (body.answers ?? {}) as Record<string, { yesNo?: string; comment?: string; photoPath?: string | null; flagged?: boolean }>;
   const rows = Object.entries(incoming)
     .filter(([id, a]) => valid.has(id) && ['yes', 'no', 'na'].includes(a?.yesNo ?? ''))
-    .map(([id, a]) => ({ audit_id: audit!.id, question_id: id, yes_no: a.yesNo!, comment: (a.comment ?? '').trim().slice(0, 1000) || null }));
+    .map(([id, a]) => ({
+      audit_id: audit!.id, question_id: id, yes_no: a.yesNo!, comment: (a.comment ?? '').trim().slice(0, 1000) || null,
+      // A photo path must sit under this org's folder.
+      photo_path: typeof a.photoPath === 'string' && a.photoPath.startsWith(`${manager.orgId}/`) ? a.photoPath : null,
+      flagged: Boolean(a.flagged),
+    }));
   if (rows.length) await db.from('audit_answers').upsert(rows, { onConflict: 'audit_id,question_id' });
 
   if (body.complete) {
-    const { data: all } = await db.from('audit_answers').select('yes_no').eq('audit_id', audit.id);
+    const { data: all } = await db.from('audit_answers').select('question_id, yes_no, photo_path').eq('audit_id', audit.id);
     if ((all ?? []).length < questions.length) {
       return NextResponse.json({ error: 'Please answer every question before completing.' }, { status: 400 });
+    }
+    const missingPhoto = questions.filter((q) => q.photoRequired && (all ?? []).find((a: any) => a.question_id === q.id)?.yes_no !== 'na' && !(all ?? []).find((a: any) => a.question_id === q.id)?.photo_path);
+    if (missingPhoto.length) {
+      return NextResponse.json({ error: `A photo is required for: ${missingPhoto.map((q) => q.prompt).join('; ')}` }, { status: 400 });
     }
     const yes = (all ?? []).filter((a: any) => a.yes_no === 'yes').length;
     const no = (all ?? []).filter((a: any) => a.yes_no === 'no').length;

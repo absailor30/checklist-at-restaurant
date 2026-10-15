@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { currentManager } from '@/lib/supabase/server';
-import { buildL3Report } from '@/lib/l3-report';
+import { buildL3Report, parseRange } from '@/lib/l3-report';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -16,10 +16,10 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const days = Math.min(Math.max(Number(url.searchParams.get('days') ?? 7), 1), 30);
+  const range = parseRange(url);
 
   try {
-    const report = await buildL3Report(createAdminClient(), manager, days);
+    const report = await buildL3Report(createAdminClient(), manager, range);
     return NextResponse.json(report);
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? 'Report failed.' }, { status: 500 });
