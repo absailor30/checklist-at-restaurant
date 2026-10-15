@@ -137,8 +137,8 @@ export default function L3ReportPage() {
           <a className="btn btn-ghost" href={`/api/l3/export?days=${days}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
             Export CSV
           </a>
-          <a className="btn btn-ghost" href="/audit" style={{ textAlign: 'center', textDecoration: 'none' }}>
-            Monthly audit
+          <a className="btn btn-ghost" href="/manager/fssai-audit" style={{ textAlign: 'center', textDecoration: 'none' }}>
+            FSSAI Audit
           </a>
           <a className="btn btn-ghost" href={`/api/l3/export/pdf?days=${days}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
             Export PDF

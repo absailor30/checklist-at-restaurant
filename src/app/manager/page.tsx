@@ -478,8 +478,8 @@ export default function ManagerDashboard() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <a className="btn-ghost" href="/audit" style={{ width: 'auto', minHeight: 40, padding: '8px 14px', display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-            Audit
+          <a className="btn-ghost" href="/manager/fssai-audit" style={{ width: 'auto', minHeight: 40, padding: '8px 14px', display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
+            FSSAI Audit
           </a>
           {canReviewL3 && (
             <a className="btn-ghost" href="/l3" style={{ width: 'auto', minHeight: 40, padding: '8px 14px', display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
