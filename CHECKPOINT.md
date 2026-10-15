@@ -68,6 +68,8 @@ Production = `main` = https://checklist-at-restaurant.vercel.app, Bakelore only 
 - Photos: camera only (no upload). Routine passing photos compressed (1280px, q0.7); failure and correction photos full quality. Files older than 60 days purged by the daily cron (`PHOTO_RETENTION_DAYS`).
 - PWA manifest: Bakelore Checklist, opens `/l1`.
 
+**Monthly L2 audit:** separate page `/audit` (links on the manager dashboard and L3 report). One audit per outlet per month (`audits`, `audit_answers`, migration 0024); L2 fills it in and it autosaves, L3 reads it; the questions are the brand's L2 bank (Bakelore: 27 FSSAI questions in 6 sections, `l2OwnBank`; global default L2 questions hidden for that brand). Completing needs every question answered and locks it; score = yes / (yes + no).
+
 **Android app** (Bubblewrap Trusted Web Activity, project built on the owner's laptop, not in this repo): package `com.checklist.checklistify`, minSdk 24, billing off, notifications on. `public/.well-known/assetlinks.json` holds the signing fingerprint. Keep `android.keystore` and its password private and backed up; never commit it. The demo key used a weak password: make a new strong key before publishing or giving the client an APK. Updates to the web app reach the Android app automatically.
 
 **Test plan for 2026-10-15 (not yet done):** start reminders 8:00/8:45/8:55 AM; sign out warning + resume; pause then sign in as someone else; temperature failure flow; photo quality; full timed run (decide if the 120-min first deadline reminder is right); L2/L3 screens and exports; deadline reminders; missed marking after noon.
