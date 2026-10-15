@@ -44,9 +44,15 @@ export async function GET(request: Request) {
       query = query.in('level', ['L2', 'L3']);
     }
 
-    const { data: questions, error } = await query;
+    const { data: rows, error } = await query;
 
     if (error) throw error;
+
+    // A brand with its own L2 audit (config.l2OwnBank) sees only that, not the global default L2 questions.
+    // The defaults stay in the database for every other brand.
+    const { data: orgRow } = await supabase.from('organisations').select('line_check_config').eq('id', profile.org_id).maybeSingle();
+    const ownL2 = Boolean((orgRow?.line_check_config as any)?.l2OwnBank);
+    const questions = ownL2 ? (rows ?? []).filter((q: any) => !(q.level === 'L2' && q.org_id === null)) : rows;
 
     return NextResponse.json({ questions });
   } catch (error: any) {

@@ -820,7 +820,9 @@ export default function ManagerDashboard() {
                   return (
                     <div key={q.id} className="card">
                       <div className="tag plain">Q{qIndex + 1} of {questions.length}</div>
+                      {q.section && <div className="desc" style={{ marginTop: 8, fontWeight: 600 }}>{q.section}</div>}
                       <h2 style={{ marginTop: 10, fontSize: 16 }}>{q.prompt}</h2>
+                      {q.notes && <p className="desc" style={{ marginTop: 6 }}>{q.notes}</p>}
                       <div className="btn-row" style={{ marginTop: 12 }}>
                         <button className={a.yesNo === 'yes' ? 'btn-primary' : 'btn-ghost'} onClick={() => setA({ yesNo: 'yes' })}>
                           Yes
