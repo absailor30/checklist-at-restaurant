@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 // One audit photo, uploaded the moment it is taken. Camera only in the app; L2 only here.
 export async function POST(request: Request) {
   const manager = await currentManager();
-  if (!manager || !manager.approved || manager.level !== 2) return NextResponse.json({ error: 'Only L2 can add audit photos.' }, { status: 403 });
+  if (!manager || !manager.approved || !(manager.level === 2 || manager.roleName === 'Admin')) return NextResponse.json({ error: 'Only L2 or Admin can add audit photos.' }, { status: 403 });
 
   const form = await request.formData();
   const file = form.get('file') as File | null;

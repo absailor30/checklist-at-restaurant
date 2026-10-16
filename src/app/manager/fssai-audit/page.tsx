@@ -8,7 +8,7 @@ import { CameraCapture } from '@/components/camera-capture';
 interface Q { id: string; prompt: string; notes: string | null; section: string | null; photoRequired?: boolean }
 type Ans = { yesNo: string | null; comment: string | null; photoPath?: string | null; flagged?: boolean };
 interface Data {
-  level: number; outlets: { id: string; name: string }[]; outletId: string; outletName: string;
+  level: number; canFill?: boolean; outlets: { id: string; name: string }[]; outletId: string; outletName: string;
   period: string; currentPeriod: string; questions: Q[];
   audit: { status: string; score: number | null; completedAt: string | null; auditorName: string | null } | null;
   answers: Record<string, Ans>;
@@ -64,7 +64,7 @@ export default function AuditPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase]);
 
-  const editable = Boolean(data && data.level === 2 && data.period === data.currentPeriod && data.audit?.status !== 'complete');
+  const editable = Boolean(data && (data.canFill ?? data.level === 2) && data.period === data.currentPeriod && data.audit?.status !== 'complete');
 
   async function save(complete = false) {
     if (!data) return false;
@@ -198,7 +198,7 @@ export default function AuditPage() {
               <>
                 <div style={{ fontWeight: 700 }}>{answered} of {questions.length} answered</div>
                 <div className="progress"><div style={{ width: `${questions.length ? (answered / questions.length) * 100 : 0}%` }} /></div>
-                {data.level !== 2 && <div className="desc" style={{ marginTop: 6 }}>Only L2 fills in the audit. You can read it here once it is saved.</div>}
+                {!(data.canFill ?? data.level === 2) && <div className="desc" style={{ marginTop: 6 }}>Only L2 fills in the audit. You can read it here once it is saved.</div>}
               </>
             )}
           </div>

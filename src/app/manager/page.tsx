@@ -76,8 +76,8 @@ export default function ManagerDashboard() {
   const [schedBusy, setSchedBusy] = useState(false);
   const [schedMessage, setSchedMessage] = useState('');
 
-  const canReviewL2 = role === 'L2 Manager' || role === 'Shift Manager';
-  const canReviewL3 = role === 'L3 Owner' || role === 'General Manager' || role === 'Owner';
+  const canReviewL2 = role === 'L2 Manager' || role === 'Shift Manager' || role === 'Admin';
+  const canReviewL3 = role === 'L3 Owner' || role === 'General Manager' || role === 'Owner' || role === 'Admin';
 
   const fetchOverview = async () => {
     try {

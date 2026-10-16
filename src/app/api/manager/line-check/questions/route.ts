@@ -23,8 +23,8 @@ export async function GET(request: Request) {
     if (level === 'L2' || level === 'L3') {
       const roleName = Array.isArray(profile.roles) ? profile.roles[0]?.name : (profile.roles as any)?.name;
       const allowed = level === 'L2'
-        ? roleName === 'L2 Manager' || roleName === 'Shift Manager'
-        : roleName === 'L3 Owner' || roleName === 'General Manager' || roleName === 'Owner';
+        ? roleName === 'L2 Manager' || roleName === 'Shift Manager' || roleName === 'Admin'
+        : roleName === 'L3 Owner' || roleName === 'General Manager' || roleName === 'Owner' || roleName === 'Admin';
       if (!allowed) {
         return NextResponse.json({ error: `${level} review is not available for your role.` }, { status: 403 });
       }
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
     if (!profile.approved) return NextResponse.json({ error: 'Your account is still waiting for approval.' }, { status: 403 });
 
     const roleName = Array.isArray(profile.roles) ? profile.roles[0]?.name : (profile.roles as any)?.name;
-    const canManage = roleName === 'L3 Owner' || roleName === 'General Manager' || roleName === 'Owner';
+    const canManage = roleName === 'L3 Owner' || roleName === 'General Manager' || roleName === 'Owner' || roleName === 'Admin';
     if (!canManage) {
       return NextResponse.json({ error: 'Only L3 can add questions.' }, { status: 403 });
     }

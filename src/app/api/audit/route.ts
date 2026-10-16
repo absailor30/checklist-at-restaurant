@@ -51,7 +51,7 @@ export async function GET(request: Request) {
     .eq('outlet_id', outlet.id).order('period', { ascending: false }).limit(24);
 
   return NextResponse.json({
-    level: manager.level, outlets: outlets.map((o) => ({ id: o.id, name: o.name })),
+    level: manager.level, canFill: manager.level === 2 || manager.roleName === 'Admin', outlets: outlets.map((o) => ({ id: o.id, name: o.name })),
     outletId: outlet.id, outletName: outlet.name, period, currentPeriod,
     questions: await questionsFor(db, manager.orgId),
     audit: audit ? { status: audit.status, score: audit.score, completedAt: audit.completed_at, auditorName } : null,
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const manager = await currentManager();
   if (!manager || !manager.approved) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
-  if (manager.level !== 2) return NextResponse.json({ error: 'Only L2 can fill in the audit.' }, { status: 403 });
+  if (!(manager.level === 2 || manager.roleName === 'Admin')) return NextResponse.json({ error: 'Only L2 or Admin can fill in the audit.' }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const db = createAdminClient();
