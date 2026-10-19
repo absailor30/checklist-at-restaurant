@@ -11,8 +11,8 @@ export const maxDuration = 30;
 export async function GET(request: Request) {
   const manager = await currentManager();
   if (!manager) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
-  if (!manager.canManage) {
-    return NextResponse.json({ error: 'L3 owner access required.' }, { status: 403 });
+  if (!(manager.canManage || manager.canReview)) {
+    return NextResponse.json({ error: 'L2 or L3 access required.' }, { status: 403 });
   }
 
   const url = new URL(request.url);

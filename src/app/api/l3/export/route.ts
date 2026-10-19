@@ -18,7 +18,7 @@ function csvCell(v: unknown): string {
 export async function GET(request: Request) {
   const manager = await currentManager();
   if (!manager) return new Response('Not signed in.', { status: 401 });
-  if (!manager.canManage) return new Response('L3 owner access required.', { status: 403 });
+  if (!(manager.canManage || manager.canReview)) return new Response('L2 or L3 access required.', { status: 403 });
 
   const url = new URL(request.url);
   const range = parseRange(url);

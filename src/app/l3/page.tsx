@@ -114,7 +114,7 @@ export default function L3ReportPage() {
   if (sessionState === 'out') {
     return (
       <div className="shell" style={{ paddingTop: 32 }}>
-        <h2>L3 sign in</h2>
+        <h2>Report sign in</h2>
         <p className="lede">Same account as the manager dashboard.</p>
         {loginError && <div className="banner error">{loginError}</div>}
         <form className="card" onSubmit={handleLogin}>
@@ -139,7 +139,7 @@ export default function L3ReportPage() {
     <>
       <div className="topbar">
         <div>
-          <h1>L3 Report</h1>
+          <h1>Report</h1>
           <div className="sub">{report?.orgName}</div>
         </div>
         <button className="btn-ghost" style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }} onClick={handleLogout}>

@@ -98,9 +98,17 @@ export async function buildL3Report(
   db: SupabaseClient, manager: Manager, opts: number | RangeOpts
 ): Promise<L3Report> {
   const o: RangeOpts = typeof opts === 'number' ? { days: opts } : opts;
-  const { data: allOutlets } = await db
+  const { data: orgOutlets } = await db
     .from('outlets').select('id, name, timezone, station_count')
     .eq('org_id', manager.orgId).eq('is_active', true).order('name');
+
+  // L3 and Admin see the whole business. L2 sees only the outlets they are assigned to.
+  let allOutlets = orgOutlets;
+  if (orgOutlets && manager.level < 3 && manager.roleName !== 'Admin') {
+    const { data: mine } = await db.from('user_outlets').select('outlet_id').eq('user_id', manager.id);
+    const ids = new Set((mine ?? []).map((r: any) => r.outlet_id));
+    allOutlets = orgOutlets.filter((o) => ids.has(o.id));
+  }
 
   if (!allOutlets || allOutlets.length === 0) {
     return {
