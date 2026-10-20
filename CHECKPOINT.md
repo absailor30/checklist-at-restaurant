@@ -90,6 +90,12 @@ Production = `main` = https://checklist-at-restaurant.vercel.app, Bakelore only 
 
 **Known gaps / next:** the "missed completion" alert (a push when a shift passes its deadline unfinished; timing from the owner, to L1 only or also L2/L3?) is not built; the Supabase free tier (about 1 GB) will not hold photos for long, so plan Pro; offline mode; paywall/SaaS work; stronger logins; cleanup of org "ZZ TEST ORG - DELETE ME"; Supabase leaked-password protection is off.
 
+## Working rule: this is a multi-client SaaS (owner's instruction, 2026-10-20)
+- Every login is a database row tied to one client (organisation) and one role. The **level and permission flags come from the database**; access never depends on a role *name*, a client-specific email, or a typed username pattern. Pages and APIs check level/flags only, and the level rule is: nobody sees above their level, higher levels read lower ones read-only, Admin sees all (L2 keeps the Report page by decision).
+- Everything is scoped to the client (`org_id`). Anything specific to one client goes in that client's settings (`organisations.line_check_config` or its own rows), not in code.
+- Per-person logins and passwords come later; they must be possible without code changes (create a user row, assign a role).
+- Known temporary things to replace before selling: role-name checks in code (`'L2 Manager'`, `'Shift Manager'`, `'L3 Owner'`, `'Admin'`), usernames hard-wired to `@bakelore.test` (`src/lib/login-id.ts`), the public outlet list on the first L1 screen (shows every client), the test `admin` login, no screen to create or reset users per client, and a review that client A can never read client B's data (server code uses the service-role key, so every query must filter by org). Suggested order: level/flag checks, per-client logins, per-client link, user admin screen, separation review.
+
 ## Review
 Staff line check: `/staff`
 Manager line check: `/manager`
