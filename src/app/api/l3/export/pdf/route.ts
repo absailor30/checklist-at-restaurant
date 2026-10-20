@@ -23,8 +23,8 @@ export async function GET(request: Request) {
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
   const pageWidth = 595, pageHeight = 842, margin = 40;
-  const cols = [62, 105, 52, 48, 40, 36, 56, 44, 34, 34]; // date, outlet, shift, stations, filled, %, band, ontime, l2, l3 (sums to the page width)
-  const headers = ['Date', 'Outlet', 'Shift', 'Stations', 'Filled', '%', 'Band', 'On time', 'L2', 'L3'];
+  const cols = [56, 84, 46, 42, 36, 30, 50, 36, 38, 38, 30, 30]; // date, outlet, shift, stations, filled, %, band, temp, missed, ontime, l2, l3 (515 wide)
+  const headers = ['Date', 'Outlet', 'Shift', 'Stations', 'Filled', '%', 'Band', 'Temp', 'Missed', 'On time', 'L2', 'L3'];
   const rowHeight = 16;
 
   let page = pdf.addPage([pageWidth, pageHeight]);
@@ -58,9 +58,10 @@ export async function GET(request: Request) {
       drawHeader();
     }
     const cells = [
-      r.date, r.outletName.slice(0, 20), r.shift, `${r.stationsComplete}/${r.stationCount}`,
+      r.date, r.outletName.slice(0, 16), r.shift, `${r.stationsComplete}/${r.stationCount}`,
       r.filledPct === null || r.filledPct === undefined ? '—' : `${r.filledPct}%`,
       r.percent?.toString() ?? '—', r.band ?? '—',
+      r.outOfRange ? String(r.outOfRange) : '—', r.missed ? String(r.missed) : '—',
       r.onTime === null ? '—' : r.onTime ? 'Yes' : 'Late',
       r.l2Complete ? 'Done' : '—', r.l3Complete ? 'Done' : '—',
     ];

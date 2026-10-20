@@ -7,7 +7,7 @@ export const maxDuration = 30;
 
 const HEADERS = [
   'Date', 'Outlet', 'Shift', 'Stations complete', 'Stations total', 'Filled percent',
-  'L1 percent', 'Band', 'On time', 'L2 reviewed', 'L3 reviewed',
+  'L1 percent', 'Band', 'Temperature alerts', 'Missed stations', 'On time', 'Delay reason', 'L2 reviewed', 'L3 reviewed',
 ];
 
 function csvCell(v: unknown): string {
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   for (const r of report.rows) {
     lines.push([
       r.date, r.outletName, r.shift, r.stationsComplete, r.stationCount, r.filledPct ?? '',
-      r.percent ?? '', r.band ?? '', r.onTime === null ? '' : r.onTime ? 'yes' : 'no',
+      r.percent ?? '', r.band ?? '', r.outOfRange, r.missed, r.onTime === null ? '' : r.onTime ? 'yes' : 'no', r.delayReason ?? '',
       r.l2Complete ? 'yes' : 'no', r.l3Complete ? 'yes' : 'no',
     ].map(csvCell).join(','));
   }
