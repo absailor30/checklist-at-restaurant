@@ -15,6 +15,7 @@ interface Row {
 interface Report {
   insights?: import('@/lib/l3-report').L3Insights;
   selectedOutletId?: string | null;
+  viewerRole?: string;
   orgName: string;
   outlets: { id: string; name: string }[];
   rows: Row[];
@@ -187,8 +188,12 @@ export default function L3ReportPage() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
           <a className="btn btn-ghost" href={`/api/l3/export?${exportQuery}`} style={{ textAlign: 'center', textDecoration: 'none' }}>Export CSV</a>
           <a className="btn btn-ghost" href={`/api/l3/export/pdf?${exportQuery}`} style={{ textAlign: 'center', textDecoration: 'none' }}>Export PDF</a>
-          <a className="btn btn-ghost" href="/manager/fssai-audit" style={{ textAlign: 'center', textDecoration: 'none' }}>FSSAI Audit</a>
-          <a className="btn btn-ghost" href="/manager/l3-checklist" style={{ textAlign: 'center', textDecoration: 'none' }}>Audit</a>
+          {['L2 Manager', 'Shift Manager', 'Admin'].includes(report?.viewerRole ?? '') && (
+            <a className="btn btn-ghost" href="/manager/fssai-audit" style={{ textAlign: 'center', textDecoration: 'none' }}>FSSAI Audit</a>
+          )}
+          {['L3 Owner', 'General Manager', 'Owner', 'Admin'].includes(report?.viewerRole ?? '') && (
+            <a className="btn btn-ghost" href="/manager/l3-checklist" style={{ textAlign: 'center', textDecoration: 'none' }}>Audit</a>
+          )}
         </div>
 
         {!loading && report?.insights && <L3Insights i={report.insights} onPickOutlet={pickOutlet} />}

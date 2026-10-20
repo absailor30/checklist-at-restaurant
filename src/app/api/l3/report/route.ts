@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
   try {
     const report = await buildL3Report(createAdminClient(), manager, range);
-    return NextResponse.json(report);
+    return NextResponse.json({ ...report, viewerRole: manager.roleName });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? 'Report failed.' }, { status: 500 });
   }
