@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { L3Charts } from '@/components/l3-charts';
-import { L3Insights, L3ChecklistCard } from '@/components/l3-insights';
+import { L3Insights } from '@/components/l3-insights';
 import { loginEmail } from '@/lib/login-id';
 
 interface Row {
@@ -15,7 +15,6 @@ interface Row {
 interface Report {
   insights?: import('@/lib/l3-report').L3Insights;
   selectedOutletId?: string | null;
-  l3Checklist?: import('@/lib/l3-report').L3ChecklistSummary;
   orgName: string;
   outlets: { id: string; name: string }[];
   rows: Row[];
@@ -193,7 +192,6 @@ export default function L3ReportPage() {
         </div>
 
         {!loading && report?.insights && <L3Insights i={report.insights} onPickOutlet={pickOutlet} />}
-        {!loading && report?.l3Checklist && <L3ChecklistCard c={report.l3Checklist} />}
 
         {!loading && report && (
           <details style={{ marginBottom: 16 }}>

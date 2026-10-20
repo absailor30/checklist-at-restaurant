@@ -6,7 +6,6 @@ import { formatCheckTime } from '@/lib/line-check/time';
 import { scoreAnswer, type LineCheckAnswer } from '@/lib/line-check/score-answer';
 import { bandOf } from '@/lib/scoring';
 import { finishedAfterDeadline } from '@/lib/line-check/delay';
-import { l3ItemsOf } from '@/lib/l3-checklist';
 
 // L3's report: how every outlet's L1 shifts went over a date range, with the
 // same period before it for comparison. Built on the line_check_* tables.
@@ -38,15 +37,8 @@ export interface L3Insights {
   heat: { stations: string[]; dates: string[]; cells: Record<string, Record<string, HeatCell>> };
 }
 
-export interface L3ChecklistSummary {
-  entries: number; expected: number;
-  items: { key: string; prompt: string; yes: number; no: number }[];
-  recentNos: { date: string; outlet: string; prompt: string; comment: string | null }[];
-}
-
 export interface L3Report {
   insights?: L3Insights;
-  l3Checklist?: L3ChecklistSummary;
   orgName: string;
   outlets: { id: string; name: string }[];
   selectedOutletId: string | null;
@@ -293,35 +285,6 @@ export async function buildL3Report(
     console.error('L3 insights failed:', e);
   }
 
-  // L3's quick checklist over the same range and outlets.
-  let l3Checklist: L3ChecklistSummary | undefined;
-  try {
-    const { data: org } = await db.from('organisations').select('line_check_config').eq('id', manager.orgId).maybeSingle();
-    const items = l3ItemsOf(org?.line_check_config);
-    const { data: checks } = await db.from('l3_checks').select('id, outlet_id, check_date')
-      .in('outlet_id', outletIds).gte('check_date', from).lte('check_date', to);
-    const ids = (checks ?? []).map((c: any) => c.id);
-    const { data: ans } = ids.length
-      ? await db.from('l3_check_answers').select('check_id, item_key, yes_no, comment').in('check_id', ids)
-      : { data: [] as any[] };
-    const checkById = new Map((checks ?? []).map((c: any) => [c.id, c]));
-    l3Checklist = {
-      entries: ids.length,
-      expected: days * selected.length,
-      items: items.map((i) => ({
-        key: i.key, prompt: i.prompt,
-        yes: (ans ?? []).filter((a: any) => a.item_key === i.key && a.yes_no === 'yes').length,
-        no: (ans ?? []).filter((a: any) => a.item_key === i.key && a.yes_no === 'no').length,
-      })),
-      recentNos: (ans ?? []).filter((a: any) => a.yes_no === 'no').map((a: any) => {
-        const c: any = checkById.get(a.check_id);
-        return { date: c?.check_date ?? '', outlet: outletById.get(c?.outlet_id)?.name ?? '', prompt: items.find((i) => i.key === a.item_key)?.prompt ?? a.item_key, comment: a.comment ?? null };
-      }).sort((x: any, y: any) => (x.date < y.date ? 1 : -1)).slice(0, 10),
-    };
-  } catch (e) {
-    console.error('L3 checklist summary failed:', e);
-  }
-
   const todayRows = rows.filter((r) => r.date === todayLocal);
   const headline = {
     date: todayLocal,
@@ -333,7 +296,7 @@ export async function buildL3Report(
   };
 
   return {
-    insights, l3Checklist, orgName: manager.name, outlets: allOutlets.map((x) => ({ id: x.id, name: x.name })),
+    insights, orgName: manager.name, outlets: allOutlets.map((x) => ({ id: x.id, name: x.name })),
     selectedOutletId: o.outletId && outlets.length ? o.outletId : null, rows, headline,
   };
 }
