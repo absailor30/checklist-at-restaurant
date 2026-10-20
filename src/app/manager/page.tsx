@@ -773,6 +773,7 @@ export default function ManagerDashboard() {
                         )}
                       </div>
                     </div>
+                    {canReviewL3 && (
                     <div className="row" style={{ marginTop: 8 }}>
                       <div className="label" style={{ margin: 0, display: 'flex', alignItems: 'center' }}>L3 Review (Area)</div>
                       <div>
@@ -793,6 +794,7 @@ export default function ManagerDashboard() {
                         )}
                       </div>
                     </div>
+                    )}
                   </div>
                   </>
                   )}

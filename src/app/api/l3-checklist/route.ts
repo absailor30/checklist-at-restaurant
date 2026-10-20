@@ -12,7 +12,7 @@ const canFill = (m: { canManage: boolean; roleName: string }) => m.canManage || 
 export async function GET(request: Request) {
   const manager = await currentManager();
   if (!manager || !manager.approved) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
-  if (manager.level < 2) return NextResponse.json({ error: 'L2 or L3 access required.' }, { status: 403 });
+  if (!(manager.level >= 3 || manager.roleName === 'Admin')) return NextResponse.json({ error: 'The L3 checklist is for L3 only.' }, { status: 403 });
 
   const db = createAdminClient();
   const { data: outlets } = await db.from('outlets').select('id, name, timezone').eq('org_id', manager.orgId).eq('is_active', true).order('name');

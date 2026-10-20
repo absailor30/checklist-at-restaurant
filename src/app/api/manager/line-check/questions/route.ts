@@ -52,7 +52,11 @@ export async function GET(request: Request) {
     // The defaults stay in the database for every other brand.
     const { data: orgRow } = await supabase.from('organisations').select('line_check_config').eq('id', profile.org_id).maybeSingle();
     const ownL2 = Boolean((orgRow?.line_check_config as any)?.l2OwnBank);
-    const questions = ownL2 ? (rows ?? []).filter((q: any) => !(q.level === 'L2' && q.org_id === null)) : rows;
+    const byBrand = ownL2 ? (rows ?? []).filter((q: any) => !(q.level === 'L2' && q.org_id === null)) : (rows ?? []);
+    // Nobody sees questions above their level: L2 gets L2 questions only.
+    const roleNameNow = Array.isArray(profile.roles) ? profile.roles[0]?.name : (profile.roles as any)?.name;
+    const seesL3 = roleNameNow === 'L3 Owner' || roleNameNow === 'General Manager' || roleNameNow === 'Owner' || roleNameNow === 'Admin';
+    const questions = seesL3 ? byBrand : byBrand.filter((q: any) => q.level !== 'L3');
 
     return NextResponse.json({ questions });
   } catch (error: any) {

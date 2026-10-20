@@ -72,6 +72,8 @@ Production = `main` = https://checklist-at-restaurant.vercel.app, Bakelore only 
 
 **L3 report v2 (2026-10-15):** ranges Today / Yesterday / 7 / 14 / 30 / 60 / 90 days / All time (latest 12 months) / custom dates, plus an outlet filter (All outlets or one; "location" = the whole business, outlet = one outlet; there is no location grouping field). API `GET /api/l3/report?days=|yesterday=1|all=1|from=&to=&outletId=`, same params on the CSV/PDF exports. Charts (inline SVG, no library): KPI tiles with change against the previous equal period, outlet comparison table, completion line, temperature-failure columns, donuts (stations, shifts, failure follow-up), station x day heatmap, Opening vs Closing, stations needing attention, products failing most. Old charts kept under "Classic charts". If the insight queries fail, the table still loads.
 
+**Level rule:** nobody sees anything above their level; higher levels can read lower ones (read-only). L1 has no access to the manager pages; L2 cannot open the L3 checklist (API refuses) and does not see the L3 review row; L3 can read the FSSAI audit read-only; Admin sees everything.
+
 **FSSAI audit is for L2 / manager (and Admin) only**: its buttons show only for them; the L3 checklist ("Audit") is for L3 (and Admin). L3 cannot fill the FSSAI audit (the API already refuses it); a direct link still opens it read-only.
 
 **FSSAI audit screen:** one question per screen like the L2 review (Yes/No/N/A, Comments / Corrective actions, Media, Flag, Back/Next). The 3 temperature questions need a camera photo (or N/A); `audit_answers.photo_path/flagged` (migration 0025); photos upload via `/api/audit/photo`. Completed audits and the L3 view show a read-only list.
