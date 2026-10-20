@@ -1,6 +1,6 @@
 'use client';
 
-import type { L3Insights as Ins, Kpis, HeatCell } from '@/lib/l3-report';
+import type { L3Insights as Ins, Kpis, HeatCell, L3ChecklistSummary } from '@/lib/l3-report';
 
 const GOOD = '#22c55e', WARN = '#f59e0b', BAD = 'var(--locked)', BLUE = '#3b82f6', GREY = 'rgba(128,128,128,.22)';
 const dm = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
@@ -220,5 +220,27 @@ export function L3Insights({ i, onPickOutlet }: { i: Ins; onPickOutlet?: (id: st
         ))}
       </Card>
     </div>
+  );
+}
+
+// How L3's quick checklist (the Audit) has gone over the chosen range.
+export function L3ChecklistCard({ c }: { c: L3ChecklistSummary }) {
+  return (
+    <Card title="L3 audit checklist" sub={`${c.entries} of ${c.expected} daily entr${c.expected === 1 ? 'y' : 'ies'} filled in`}>
+      {c.entries === 0 ? <div className="empty">No entries in this range.</div> : c.items.map((it) => (
+        <HBar key={it.key} label={it.prompt} value={it.yes} max={Math.max(1, it.yes + it.no)} color={it.no ? WARN : GOOD} right={`${it.yes} yes · ${it.no} no`} />
+      ))}
+      {c.recentNos.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>Recent "No" answers</div>
+          {c.recentNos.map((n, i) => (
+            <div key={i} style={{ marginTop: 6, fontSize: 13 }}>
+              <span style={{ color: BAD as string, fontWeight: 700 }}>No</span> · {n.prompt} <span className="desc">({n.date}{n.outlet ? ` · ${n.outlet}` : ''})</span>
+              {n.comment && <div className="desc">{n.comment}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
