@@ -481,6 +481,11 @@ export default function ManagerDashboard() {
           <a className="btn-ghost" href="/manager/fssai-audit" style={{ width: 'auto', minHeight: 40, padding: '8px 14px', display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
             FSSAI Audit
           </a>
+          {canReviewL3 && (
+            <a className="btn-ghost" href="/manager/l3-checklist" style={{ width: 'auto', minHeight: 40, padding: '8px 14px', display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
+              L3 Checklist
+            </a>
+          )}
           {(canReviewL2 || canReviewL3) && (
             <a className="btn-ghost" href="/l3" style={{ width: 'auto', minHeight: 40, padding: '8px 14px', display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
               Report

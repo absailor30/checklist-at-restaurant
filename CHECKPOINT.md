@@ -78,6 +78,8 @@ Production = `main` = https://checklist-at-restaurant.vercel.app, Bakelore only 
 
 **Report access:** the report page `/l3` (titled "Report") and its exports are open to L2 as well as L3 and Admin. L3 and Admin see every outlet; L2 sees only the outlets assigned to them (`user_outlets`). The Report button shows on the manager dashboard for L2 and L3.
 
+**L3 quick checklist:** page `/manager/l3-checklist` (button on the manager dashboard and the report). Five yes/no items with an optional comment each: line checks done regularly, monthly FSSAI audits done, cleanliness maintained, steps of service followed, suggestive selling followed. One entry per outlet per day (`l3_checks`, `l3_check_answers`, migration 0026); L3 and Admin fill it, L2 can read it. Items come from `src/lib/l3-checklist.ts`, or from `line_check_config.l3Checklist` per brand.
+
 **Android app** (Bubblewrap Trusted Web Activity, project built on the owner's laptop, not in this repo): package `com.checklist.checklistify`, minSdk 24, billing off, notifications on. `public/.well-known/assetlinks.json` holds the signing fingerprint. Keep `android.keystore` and its password private and backed up; never commit it. The demo key used a weak password: make a new strong key before publishing or giving the client an APK. Updates to the web app reach the Android app automatically.
 
 **Test plan for 2026-10-15 (not yet done):** start reminders 8:00/8:45/8:55 AM; sign out warning + resume; pause then sign in as someone else; temperature failure flow; photo quality; full timed run (decide if the 120-min first deadline reminder is right); L2/L3 screens and exports; deadline reminders; missed marking after noon.

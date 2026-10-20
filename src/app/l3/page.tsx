@@ -188,6 +188,7 @@ export default function L3ReportPage() {
           <a className="btn btn-ghost" href={`/api/l3/export?${exportQuery}`} style={{ textAlign: 'center', textDecoration: 'none' }}>Export CSV</a>
           <a className="btn btn-ghost" href={`/api/l3/export/pdf?${exportQuery}`} style={{ textAlign: 'center', textDecoration: 'none' }}>Export PDF</a>
           <a className="btn btn-ghost" href="/manager/fssai-audit" style={{ textAlign: 'center', textDecoration: 'none' }}>FSSAI Audit</a>
+          <a className="btn btn-ghost" href="/manager/l3-checklist" style={{ textAlign: 'center', textDecoration: 'none' }}>L3 Checklist</a>
         </div>
 
         {!loading && report?.insights && <L3Insights i={report.insights} onPickOutlet={pickOutlet} />}
