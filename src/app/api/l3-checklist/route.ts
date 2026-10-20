@@ -5,8 +5,8 @@ import { l3ItemsOf } from '@/lib/l3-checklist';
 
 export const dynamic = 'force-dynamic';
 
-// L3's quick checklist. L3 (and Admin) fill it in, one entry per outlet per day; L2 can read it.
-const dayIn = (tz: string) => new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+// L3's quick checklist. L3 (and Admin) fill it in, one entry per outlet per month; stored under the first day of the month.
+const dayIn = (tz: string) => `${new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit' }).format(new Date()).slice(0, 7)}-01`;
 const canFill = (m: { canManage: boolean; roleName: string }) => m.canManage || m.roleName === 'Admin';
 
 export async function GET(request: Request) {

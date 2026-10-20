@@ -11,6 +11,8 @@ interface Data {
   history: { date: string; yes: number; no: number; answers: Record<string, Ans> }[];
 }
 
+const monthName = (d: string) => new Date(`${d.slice(0, 7)}-01T00:00:00`).toLocaleString('en-GB', { month: 'long', year: 'numeric' });
+
 export default function L3ChecklistPage() {
   const supabase = createClient();
   const [session, setSession] = useState<'checking' | 'in' | 'out'>('checking');
@@ -89,7 +91,7 @@ export default function L3ChecklistPage() {
       <div className="topbar">
         <div>
           <h1>L3 Checklist</h1>
-          <div className="sub">{data ? `${data.outletName} · ${data.today}` : ''}</div>
+          <div className="sub">{data ? `${data.outletName} · ${monthName(data.today)}` : ''}</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <a className="btn-ghost" href="/manager" style={{ width: 'auto', minHeight: 40, padding: '8px 14px', display: 'flex', alignItems: 'center', textDecoration: 'none' }}>Dashboard</a>
@@ -105,7 +107,7 @@ export default function L3ChecklistPage() {
           </select>
         )}
         {data && !data.canFill && <div className="banner">Only L3 fills in this checklist. You can read the entries below.</div>}
-        {data && doneToday && data.canFill && <div className="banner">Today's checklist is saved. You can change it and save again.</div>}
+        {data && doneToday && data.canFill && <div className="banner">This month's checklist is saved. You can change it and save again.</div>}
 
         {data && data.canFill && items.map((it) => {
           const a = answers[it.key];
@@ -128,11 +130,11 @@ export default function L3ChecklistPage() {
 
         {data && data.history.length > 0 && (
           <>
-            <h3 style={{ margin: '20px 0 8px' }}>Previous entries</h3>
+            <h3 style={{ margin: '20px 0 8px' }}>Previous months</h3>
             {data.history.map((h) => (
               <div key={h.date} className="card" style={{ marginBottom: 8, boxShadow: 'none' }}>
                 <button className="btn-ghost" style={{ width: '100%', textAlign: 'left' }} onClick={() => setOpen(open === h.date ? null : h.date)}>
-                  {h.date} · {h.yes} yes{h.no ? <span style={{ color: 'var(--locked)', fontWeight: 700 }}> · {h.no} no</span> : ''}
+                  {monthName(h.date)} · {h.yes} yes{h.no ? <span style={{ color: 'var(--locked)', fontWeight: 700 }}> · {h.no} no</span> : ''}
                 </button>
                 {open === h.date && items.map((it) => (
                   <div key={it.key} style={{ marginTop: 8 }}>

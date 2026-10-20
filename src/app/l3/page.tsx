@@ -19,11 +19,44 @@ interface Report {
   orgName: string;
   outlets: { id: string; name: string; location?: string | null }[];
   locations?: string[];
+  filterOptions?: { shifts: { key: string; label: string }[]; stations: { no: number; name: string }[] };
   rows: Row[];
   headline: {
     date: string; shiftsExpected: number; shiftsL1Complete: number;
     pendingL2: number; pendingL3: number; late: number;
   };
+}
+
+type Range = { kind: 'days' | 'yesterday' | 'all' | 'custom' | 'month'; days?: number; from?: string; to?: string; month?: string; offset?: number };
+interface Filters { outletId: string; location: string; shift: string; station: string }
+const NO_FILTERS: Filters = { outletId: '', location: '', shift: '', station: '' };
+
+const PRESETS: { label: string; r: Range }[] = [
+  { label: 'Today', r: { kind: 'days', days: 1 } },
+  { label: 'Yesterday', r: { kind: 'yesterday' } },
+  { label: '7 days', r: { kind: 'days', days: 7 } },
+  { label: '14 days', r: { kind: 'days', days: 14 } },
+  { label: '30 days', r: { kind: 'days', days: 30 } },
+  { label: 'This month', r: { kind: 'month', offset: 0 } },
+  { label: 'Last month', r: { kind: 'month', offset: -1 } },
+  { label: '60 days', r: { kind: 'days', days: 60 } },
+  { label: '90 days', r: { kind: 'days', days: 90 } },
+  { label: 'All time', r: { kind: 'all' } },
+];
+const sameRange = (a: Range, b: Range) => a.kind === b.kind && a.days === b.days && a.offset === b.offset && !a.month && !b.month;
+
+function queryOf(r: Range, f: Filters) {
+  const q = new URLSearchParams();
+  if (r.kind === 'days') q.set('days', String(r.days ?? 7));
+  if (r.kind === 'yesterday') q.set('yesterday', '1');
+  if (r.kind === 'all') q.set('all', '1');
+  if (r.kind === 'month') { if (r.month) q.set('month', r.month); else q.set('monthOffset', String(r.offset ?? 0)); }
+  if (r.kind === 'custom' && r.from && r.to) { q.set('from', r.from); q.set('to', r.to); }
+  if (f.outletId) q.set('outletId', f.outletId);
+  if (f.location) q.set('location', f.location);
+  if (f.shift) q.set('shift', f.shift);
+  if (f.station) q.set('station', f.station);
+  return q.toString();
 }
 
 export default function L3ReportPage() {
@@ -34,31 +67,19 @@ export default function L3ReportPage() {
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState('');
 
-  type Range = { kind: 'days' | 'yesterday' | 'all' | 'custom'; days?: number; from?: string; to?: string };
   const [range, setRange] = useState<Range>({ kind: 'days', days: 7 });
-  const [outletId, setOutletId] = useState('');
-  const [location, setLocation] = useState('');
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
-
-  const query = useCallback((r: Range, outlet: string, loc: string) => {
-    const q = new URLSearchParams();
-    if (r.kind === 'days') q.set('days', String(r.days ?? 7));
-    if (r.kind === 'yesterday') q.set('yesterday', '1');
-    if (r.kind === 'all') q.set('all', '1');
-    if (r.kind === 'custom' && r.from && r.to) { q.set('from', r.from); q.set('to', r.to); }
-    if (outlet) q.set('outletId', outlet);
-    if (loc) q.set('location', loc);
-    return q.toString();
-  }, []);
+  const [onlyIssues, setOnlyIssues] = useState(false);
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const fetchReport = useCallback(async (r: Range, outlet: string, loc: string) => {
+  const fetchReport = useCallback(async (r: Range, f: Filters) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/l3/report?${query(r, outlet, loc)}`);
+      const res = await fetch(`/api/l3/report?${queryOf(r, f)}`);
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
       setError(''); setReport(data);
@@ -72,11 +93,11 @@ export default function L3ReportPage() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSessionState(session ? 'in' : 'out');
-      if (session) void fetchReport(range, outletId, location);
+      if (session) void fetchReport(range, filters);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setSessionState(session ? 'in' : 'out');
-      if (session) void fetchReport(range, outletId, location);
+      if (session) void fetchReport(range, filters);
     });
     return () => subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -92,30 +113,15 @@ export default function L3ReportPage() {
 
   async function handleLogout() { await supabase.auth.signOut(); }
 
-  function pick(r: Range) {
-    setRange(r);
-    void fetchReport(r, outletId, location);
+  function pick(r: Range) { setRange(r); void fetchReport(r, filters); }
+  function setFilter(patch: Partial<Filters>) {
+    const next = { ...filters, ...patch };
+    setFilters(next);
+    void fetchReport(range, next);
   }
-  function pickOutlet(id: string) {
-    setOutletId(id);
-    void fetchReport(range, id, location);
-  }
-  function pickLocation(loc: string) {
-    setLocation(loc); setOutletId('');
-    void fetchReport(range, '', loc);
-  }
-  const PRESETS: { label: string; r: Range }[] = [
-    { label: 'Today', r: { kind: 'days', days: 1 } },
-    { label: 'Yesterday', r: { kind: 'yesterday' } },
-    { label: '7 days', r: { kind: 'days', days: 7 } },
-    { label: '14 days', r: { kind: 'days', days: 14 } },
-    { label: '30 days', r: { kind: 'days', days: 30 } },
-    { label: '60 days', r: { kind: 'days', days: 60 } },
-    { label: '90 days', r: { kind: 'days', days: 90 } },
-    { label: 'All time', r: { kind: 'all' } },
-  ];
-  const sameRange = (a: Range, b: Range) => a.kind === b.kind && a.days === b.days;
-  const exportQuery = query(range, outletId, location);
+  function pickOutlet(id: string) { setFilter({ outletId: id }); }
+  const exportQuery = queryOf(range, filters);
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
   if (sessionState === 'checking') return <div className="shell" style={{ paddingTop: 32 }}><div className="spinner" /></div>;
 
@@ -158,45 +164,74 @@ export default function L3ReportPage() {
       <div className="shell">
         {error && <div className="banner error">{error}</div>}
 
-        {report && (
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: 16 }}>
-            <Stat label="L1 shifts complete today" value={`${report.headline.shiftsL1Complete}/${report.headline.shiftsExpected}`} />
-            <Stat label="Pending L2 review" value={String(report.headline.pendingL2)} warn={report.headline.pendingL2 > 0} />
-            <Stat label="Pending L3 review" value={String(report.headline.pendingL3)} warn={report.headline.pendingL3 > 0} />
-            <Stat label="Late today" value={String(report.headline.late)} warn={report.headline.late > 0} />
+        {/* Filters */}
+        <div className="card" style={{ boxShadow: 'none', marginBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            {report && (report.locations?.length ?? 0) > 1 && (
+              <div style={{ flex: '1 1 150px' }}>
+                <label style={{ marginTop: 0 }}>Location</label>
+                <select value={filters.location} onChange={(e) => setFilter({ location: e.target.value, outletId: '' })}>
+                  <option value="">All locations</option>
+                  {(report.locations ?? []).map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+            )}
+            {report && report.outlets.length > 1 && (
+              <div style={{ flex: '1 1 150px' }}>
+                <label style={{ marginTop: 0 }}>Outlet</label>
+                <select value={filters.outletId} onChange={(e) => setFilter({ outletId: e.target.value })}>
+                  <option value="">All outlets</option>
+                  {report.outlets.filter((o) => !filters.location || o.location === filters.location).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                </select>
+              </div>
+            )}
+            {report?.filterOptions && report.filterOptions.shifts.length > 1 && (
+              <div style={{ flex: '1 1 130px' }}>
+                <label style={{ marginTop: 0 }}>Shift</label>
+                <select value={filters.shift} onChange={(e) => setFilter({ shift: e.target.value })}>
+                  <option value="">All shifts</option>
+                  {report.filterOptions.shifts.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+                </select>
+              </div>
+            )}
+            {report?.filterOptions && report.filterOptions.stations.length > 1 && (
+              <div style={{ flex: '1 1 150px' }}>
+                <label style={{ marginTop: 0 }}>Station</label>
+                <select value={filters.station} onChange={(e) => setFilter({ station: e.target.value })}>
+                  <option value="">All stations</option>
+                  {report.filterOptions.stations.map((x) => <option key={x.no} value={String(x.no)}>{x.name}</option>)}
+                </select>
+              </div>
+            )}
+            <div style={{ flex: '1 1 150px' }}>
+              <label style={{ marginTop: 0 }}>Month</label>
+              <input type="month" value={range.kind === 'month' && range.month ? range.month : ''}
+                onChange={(e) => { if (e.target.value) pick({ kind: 'month', month: e.target.value }); }} />
+            </div>
+            {activeFilterCount > 0 && (
+              <button className="btn-ghost" style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }}
+                onClick={() => { setFilters(NO_FILTERS); void fetchReport(range, NO_FILTERS); }}>Clear filters</button>
+            )}
           </div>
-        )}
 
-        {report && (report.locations?.length ?? 0) > 1 && (
-          <select value={location} onChange={(e) => pickLocation(e.target.value)} style={{ marginBottom: 12 }}>
-            <option value="">All locations</option>
-            {(report.locations ?? []).map((l) => <option key={l} value={l}>{l}</option>)}
-          </select>
-        )}
-        {report && report.outlets.length > 1 && (
-          <select value={outletId} onChange={(e) => pickOutlet(e.target.value)} style={{ marginBottom: 12 }}>
-            <option value="">All outlets</option>
-            {report.outlets.filter((o) => !location || o.location === location).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-          </select>
-        )}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+            {PRESETS.map((p) => (
+              <button key={p.label} className={sameRange(range, p.r) ? 'btn-primary' : 'btn-ghost'}
+                style={{ width: 'auto', minHeight: 36, padding: '6px 12px' }} onClick={() => pick(p.r)}>{p.label}</button>
+            ))}
+            <button className={range.kind === 'custom' ? 'btn-primary' : 'btn-ghost'}
+              style={{ width: 'auto', minHeight: 36, padding: '6px 12px' }} onClick={() => setRange({ kind: 'custom', from: customFrom, to: customTo })}>Custom dates</button>
+          </div>
 
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-          {PRESETS.map((p) => (
-            <button key={p.label} className={sameRange(range, p.r) ? 'btn-primary' : 'btn-ghost'}
-              style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }} onClick={() => pick(p.r)}>{p.label}</button>
-          ))}
-          <button className={range.kind === 'custom' ? 'btn-primary' : 'btn-ghost'}
-            style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }} onClick={() => setRange({ kind: 'custom', from: customFrom, to: customTo })}>Custom dates</button>
+          {range.kind === 'custom' && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 12 }}>
+              <div><label style={{ marginTop: 0 }}>From</label><input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} /></div>
+              <div><label style={{ marginTop: 0 }}>To</label><input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} /></div>
+              <button className="btn-primary" style={{ width: 'auto' }} disabled={!customFrom || !customTo}
+                onClick={() => pick({ kind: 'custom', from: customFrom, to: customTo })}>Show</button>
+            </div>
+          )}
         </div>
-
-        {range.kind === 'custom' && (
-          <div className="card" style={{ boxShadow: 'none', marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <div><label style={{ marginTop: 0 }}>From</label><input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} /></div>
-            <div><label style={{ marginTop: 0 }}>To</label><input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} /></div>
-            <button className="btn-primary" style={{ width: 'auto' }} disabled={!customFrom || !customTo}
-              onClick={() => pick({ kind: 'custom', from: customFrom, to: customTo })}>Show</button>
-          </div>
-        )}
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
           <a className="btn btn-ghost" href={`/api/l3/export?${exportQuery}`} style={{ textAlign: 'center', textDecoration: 'none' }}>Export CSV</a>
@@ -209,6 +244,15 @@ export default function L3ReportPage() {
           )}
         </div>
 
+        {report && (
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: 16 }}>
+            <Stat label="L1 shifts complete today" value={`${report.headline.shiftsL1Complete}/${report.headline.shiftsExpected}`} />
+            <Stat label="Pending L2 review" value={String(report.headline.pendingL2)} warn={report.headline.pendingL2 > 0} />
+            <Stat label="Pending L3 review" value={String(report.headline.pendingL3)} warn={report.headline.pendingL3 > 0} />
+            <Stat label="Late today" value={String(report.headline.late)} warn={report.headline.late > 0} />
+          </div>
+        )}
+
         {!loading && report?.insights && <L3Insights i={report.insights} onPickOutlet={pickOutlet} />}
 
         {!loading && report && (
@@ -216,6 +260,13 @@ export default function L3ReportPage() {
             <summary style={{ cursor: 'pointer', fontWeight: 600, marginBottom: 8 }}>Classic charts</summary>
             <L3Charts rows={report.rows} />
           </details>
+        )}
+
+        {!loading && report && (
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '0 0 8px', fontWeight: 400 }}>
+            <input type="checkbox" checked={onlyIssues} onChange={(e) => setOnlyIssues(e.target.checked)} style={{ width: 'auto' }} />
+            Only show shifts with a problem (temperature failures, missed, late or not fully filled)
+          </label>
         )}
 
         {loading ? <div className="spinner" /> : (
@@ -229,7 +280,7 @@ export default function L3ReportPage() {
                 </tr>
               </thead>
               <tbody>
-                {(report?.rows ?? []).slice(0, 200).map((r, i) => (
+                {(report?.rows ?? []).filter((r) => !onlyIssues || r.outOfRange > 0 || r.missed > 0 || r.onTime === false || (r.filledPct ?? 100) < 100).slice(0, 200).map((r, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '6px 8px' }}>{r.date}</td>
                     <td style={{ padding: '6px 8px' }}>{r.outletName}</td>

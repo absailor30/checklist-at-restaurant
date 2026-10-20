@@ -53,13 +53,20 @@ export interface L3Report {
   selectedOutletId: string | null;
   selectedLocation: string | null;
   rows: L3ReportRow[];
+  filterOptions: { shifts: { key: string; label: string }[]; stations: { no: number; name: string }[] };
   headline: {
     date: string; shiftsExpected: number; shiftsL1Complete: number;
     pendingL2: number; pendingL3: number; late: number;
   };
 }
 
-export interface RangeOpts { days?: number; from?: string; to?: string; outletId?: string | null; location?: string | null; all?: boolean; yesterday?: boolean }
+export interface RangeOpts {
+  days?: number; from?: string; to?: string; outletId?: string | null; location?: string | null; all?: boolean; yesterday?: boolean;
+  month?: string;        // 'YYYY-MM'
+  monthOffset?: number;  // 0 = this month, -1 = last month
+  shift?: string | null; // 'morning' | 'evening' ...
+  station?: number | null;
+}
 
 const DAY = 86400000;
 const addDays = (date: string, n: number) => new Date(Date.parse(`${date}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
@@ -83,6 +90,9 @@ export function parseRange(url: URL): RangeOpts {
     from: isDate(from) ? from : undefined, to: isDate(to) ? to : undefined,
     all: q.get('all') === '1', yesterday: q.get('yesterday') === '1',
     outletId: q.get('outletId') || null, location: q.get('location') || null,
+    month: /^\d{4}-\d{2}$/.test(q.get('month') ?? '') ? q.get('month')! : undefined,
+    monthOffset: q.get('monthOffset') !== null && Number.isFinite(Number(q.get('monthOffset'))) ? Math.max(-24, Math.min(0, Number(q.get('monthOffset')))) : undefined,
+    shift: q.get('shift') || null, station: Number.isInteger(Number(q.get('station'))) && Number(q.get('station')) > 0 ? Number(q.get('station')) : null,
   };
 }
 
@@ -93,14 +103,18 @@ const RUN_SELECT = `
     line_check_answers ( question_id, yes_no, value_number, photo_path, reason, out_of_range, correction_photo_path )
   )`;
 
-async function runsPage(db: SupabaseClient, outletIds: string[], from: string, to: string) {
+async function runsPage(db: SupabaseClient, outletIds: string[], from: string, to: string, shift?: string | null, station?: number | null) {
   const out: any[] = [];
   for (let offset = 0; ; offset += 200) {
-    const { data, error } = await db.from('line_check_runs').select(RUN_SELECT)
-      .in('outlet_id', outletIds).gte('run_date', from).lte('run_date', to)
-      .order('run_date').range(offset, offset + 199);
+    let q = db.from('line_check_runs').select(RUN_SELECT)
+      .in('outlet_id', outletIds).gte('run_date', from).lte('run_date', to);
+    if (shift) q = q.eq('shift', shift);
+    const { data, error } = await q.order('run_date').range(offset, offset + 199);
     if (error) throw new Error(error.message);
-    out.push(...(data ?? []));
+    for (const r of data ?? []) {
+      if (station) r.line_check_stations = (r.line_check_stations ?? []).filter((s: any) => s.station_no === station);
+      out.push(r);
+    }
     if ((data ?? []).length < 200) break;
   }
   return out;
@@ -125,6 +139,7 @@ export async function buildL3Report(
   if (!allOutlets || allOutlets.length === 0) {
     return {
       orgName: manager.name, outlets: [], locations: [], selectedOutletId: null, selectedLocation: null, rows: [],
+      filterOptions: { shifts: [], stations: [] },
       headline: { date: '', shiftsExpected: 0, shiftsL1Complete: 0, pendingL2: 0, pendingL3: 0, late: 0 },
     };
   }
@@ -142,7 +157,18 @@ export async function buildL3Report(
 
   // ---- range ----
   let from: string, to: string, capped = false;
-  if (o.yesterday) {
+  const monthStart = (ym: string) => `${ym}-01`;
+  const monthEnd = (ym: string) => addDays(`${new Date(Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 1)).toISOString().slice(0, 7)}-01`, -1);
+  const shiftMonth = (ym: string, n: number) => new Date(Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1 + n, 1)).toISOString().slice(0, 7);
+  const monthRange = (ym: string): [string, string] => {
+    const f = monthStart(ym);
+    const l = monthEnd(ym);
+    return f > todayLocal ? [todayLocal, todayLocal] : [f, l > todayLocal ? todayLocal : l];
+  };
+  if (o.month || o.monthOffset !== undefined) {
+    const ym = o.month ?? shiftMonth(todayLocal.slice(0, 7), o.monthOffset ?? 0);
+    [from, to] = monthRange(ym);
+  } else if (o.yesterday) {
     to = addDays(todayLocal, -1); from = to;
   } else if (o.from && o.to) {
     to = o.to > todayLocal ? todayLocal : o.to;
@@ -164,7 +190,7 @@ export async function buildL3Report(
   const deadlineOf = (shift: string) => (shift in bank.shiftDeadlines ? bank.shiftDeadlines[shift] : bank.hardStop);
   const allQuestions = bank.stations.flatMap((b) => b.questions);
 
-  const runs = await runsPage(db, outletIds, from, to);
+  const runs = await runsPage(db, outletIds, from, to, o.shift, o.station);
 
   // What one station contributed: questions answered of those expected, and how well the answered ones went.
   const statsOf = (s: any) => {
@@ -243,7 +269,7 @@ export async function buildL3Report(
   try {
     const kpis = kpiOf(runs);
     const hasPrevious = days <= PREVIOUS_MAX_SPAN;
-    const previous = hasPrevious ? kpiOf(await runsPage(db, outletIds, previousFrom, previousTo)) : emptyKpis();
+    const previous = hasPrevious ? kpiOf(await runsPage(db, outletIds, previousFrom, previousTo, o.shift, o.station)) : emptyKpis();
 
     type Acc = { done: number; partial: number; notStarted: number; answered: number; expected: number; fails: number; pts: number; scored: number };
     const acc = (): Acc => ({ done: 0, partial: 0, notStarted: 0, answered: 0, expected: 0, fails: 0, pts: 0, scored: 0 });
@@ -338,5 +364,9 @@ export async function buildL3Report(
     outlets: allOutlets.map((x: any) => ({ id: x.id, name: x.name, location: x.location ?? null })),
     locations, selectedOutletId: o.outletId && pool.length ? o.outletId : null, selectedLocation: o.location && pool.length ? o.location : null,
     rows, headline,
+    filterOptions: {
+      shifts: bank.activeShifts.map((k) => ({ key: k, label: bank.shiftLabels[k] ?? k })),
+      stations: bank.stations.map((b) => ({ no: b.no, name: b.name })),
+    },
   };
 }
