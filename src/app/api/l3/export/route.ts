@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 const HEADERS = [
-  'Date', 'Outlet', 'Shift', 'Stations complete', 'Stations total',
+  'Date', 'Outlet', 'Shift', 'Stations complete', 'Stations total', 'Filled percent',
   'L1 percent', 'Band', 'On time', 'L2 reviewed', 'L3 reviewed',
 ];
 
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   const lines = [HEADERS.join(',')];
   for (const r of report.rows) {
     lines.push([
-      r.date, r.outletName, r.shift, r.stationsComplete, r.stationCount,
+      r.date, r.outletName, r.shift, r.stationsComplete, r.stationCount, r.filledPct ?? '',
       r.percent ?? '', r.band ?? '', r.onTime === null ? '' : r.onTime ? 'yes' : 'no',
       r.l2Complete ? 'yes' : 'no', r.l3Complete ? 'yes' : 'no',
     ].map(csvCell).join(','));

@@ -23,8 +23,8 @@ export async function GET(request: Request) {
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
   const pageWidth = 595, pageHeight = 842, margin = 40;
-  const cols = [70, 140, 65, 60, 45, 60, 55, 40, 40]; // date, outlet, shift, stations, %, band, ontime, l2, l3
-  const headers = ['Date', 'Outlet', 'Shift', 'Stations', '%', 'Band', 'On time', 'L2', 'L3'];
+  const cols = [62, 105, 52, 48, 40, 36, 56, 44, 34, 34]; // date, outlet, shift, stations, filled, %, band, ontime, l2, l3 (sums to the page width)
+  const headers = ['Date', 'Outlet', 'Shift', 'Stations', 'Filled', '%', 'Band', 'On time', 'L2', 'L3'];
   const rowHeight = 16;
 
   let page = pdf.addPage([pageWidth, pageHeight]);
@@ -58,7 +58,8 @@ export async function GET(request: Request) {
       drawHeader();
     }
     const cells = [
-      r.date, r.outletName.slice(0, 22), r.shift, `${r.stationsComplete}/${r.stationCount}`,
+      r.date, r.outletName.slice(0, 20), r.shift, `${r.stationsComplete}/${r.stationCount}`,
+      r.filledPct === null || r.filledPct === undefined ? '—' : `${r.filledPct}%`,
       r.percent?.toString() ?? '—', r.band ?? '—',
       r.onTime === null ? '—' : r.onTime ? 'Yes' : 'Late',
       r.l2Complete ? 'Done' : '—', r.l3Complete ? 'Done' : '—',
