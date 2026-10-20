@@ -17,9 +17,9 @@ function Card({ title, sub, children }: { title: string; sub?: string; children:
 }
 
 // A tile with the number, and how it moved against the same-length period just before.
-function Kpi({ label, value, cur, prev, goodWhenUp, sub }: { label: string; value: string; cur: number | null; prev: number | null; goodWhenUp: boolean; sub?: string }) {
-  let delta: React.ReactNode = <span className="desc">no earlier data</span>;
-  if (cur !== null && prev !== null) {
+function Kpi({ label, value, cur, prev, goodWhenUp, sub, hasPrev }: { label: string; value: string; cur: number | null; prev: number | null; goodWhenUp: boolean; sub?: string; hasPrev: boolean }) {
+  let delta: React.ReactNode = <span className="desc">{hasPrev ? 'no earlier data' : ''}</span>;
+  if (hasPrev && cur !== null && prev !== null) {
     const d = Math.round((cur - prev) * 10) / 10;
     const good = d === 0 ? null : (d > 0) === goodWhenUp;
     delta = (
@@ -88,7 +88,15 @@ function Donut({ parts, centre, label }: { parts: { v: number; c: string; name: 
   );
 }
 
-const cellColor = (c?: HeatCell) => !c ? 'transparent' : c.s === 'done' ? GOOD : c.s === 'partial' ? WARN : c.s === 'missed' ? 'var(--locked)' : GREY;
+// Heatmap colours follow how much was filled in, so partly filled checks still read at a glance.
+const cellColor = (c?: HeatCell) => {
+  if (!c) return 'transparent';
+  if (c.s === 'missed') return 'var(--locked)';
+  if (c.s === 'none') return GREY;
+  if (c.s === 'done') return GOOD;
+  const p = c.p ?? 0;
+  return p >= 75 ? '#84cc16' : p >= 40 ? WARN : '#f97316';
+};
 
 function Heatmap({ h }: { h: Ins['heat'] }) {
   if (!h.dates.length) return <div className="empty">No data in this range.</div>;
@@ -105,7 +113,7 @@ function Heatmap({ h }: { h: Ins['heat'] }) {
               {h.dates.map((d) => {
                 const c = h.cells[st]?.[d];
                 return (
-                  <td key={d} title={`${st} · ${dm(d)}: ${c ? c.s : 'no run'}${c?.f ? ` · ${c.f} temp failure${c.f === 1 ? '' : 's'}` : ''}`}
+                  <td key={d} title={`${st} · ${dm(d)}: ${c ? (c.s === 'missed' ? 'not started' : c.s === 'none' ? 'nothing yet' : `${c.p ?? 0}% filled${c.s === 'done' ? ' (complete)' : ''}`) : 'no run'}${c?.f ? ` · ${c.f} temperature failure${c.f === 1 ? '' : 's'}` : ''}`}
                     style={{ width: 18, height: 18, background: cellColor(c), borderRadius: 3, textAlign: 'center', color: '#fff', fontSize: 10, fontWeight: 700 }}>
                     {c?.f ? '!' : ''}
                   </td>
@@ -116,7 +124,7 @@ function Heatmap({ h }: { h: Ins['heat'] }) {
         </tbody>
       </table>
       <div className="desc" style={{ marginTop: 6 }}>
-        <span style={{ color: GOOD }}>■</span> done &nbsp;<span style={{ color: WARN }}>■</span> partly done &nbsp;<span style={{ color: 'var(--locked)' }}>■</span> missed &nbsp;<span style={{ opacity: 0.5 }}>■</span> not started · ! = temperature failure. Day numbers shown (latest 31 days).
+        <span style={{ color: GOOD }}>■</span> complete &nbsp;<span style={{ color: '#84cc16' }}>■</span> mostly filled &nbsp;<span style={{ color: WARN }}>■</span> partly filled &nbsp;<span style={{ color: '#f97316' }}>■</span> barely started &nbsp;<span style={{ color: 'var(--locked)' }}>■</span> not started &nbsp;<span style={{ opacity: 0.5 }}>■</span> nothing yet · ! = temperature failure. Latest 31 days.
       </div>
     </div>
   );
@@ -135,24 +143,26 @@ function HBar({ label, value, max, color, right }: { label: string; value: numbe
 }
 
 export function L3Insights({ i, onPickOutlet }: { i: Ins; onPickOutlet?: (id: string) => void }) {
-  const k: Kpis = i.kpis, p: Kpis = i.previous;
+  const k: Kpis = i.kpis, p: Kpis = i.previous, hp = i.range.hasPrevious;
   const multiOutlet = i.byOutlet.length > 1;
-  const worstStations = [...i.byStation].sort((a, b) => (b.missed + b.tempFails) - (a.missed + a.tempFails));
-  const maxIssue = Math.max(1, ...worstStations.map((s) => s.missed + s.tempFails));
+  const worst = [...i.byStation].map((s) => ({ ...s, issues: s.notStarted + s.partial + s.tempFails })).sort((a, b) => b.issues - a.issues).filter((s) => s.issues > 0);
+  const maxIssue = Math.max(1, ...worst.map((s) => s.issues));
   const cor = i.corrective;
+  const locations = [...new Set(i.byOutlet.map((o) => o.location ?? 'No location'))];
 
   return (
     <div style={{ marginBottom: 8 }}>
       <div className="desc" style={{ marginBottom: 8 }}>
-        {i.range.from === i.range.to ? i.range.from : `${i.range.from} to ${i.range.to}`} ({i.range.days} day{i.range.days === 1 ? '' : 's'}), compared with {i.range.previousFrom === i.range.previousTo ? i.range.previousFrom : `${i.range.previousFrom} to ${i.range.previousTo}`}.
-        {i.range.capped && ' Shown: the latest 12 months.'}
+        {i.range.from === i.range.to ? i.range.from : `${i.range.from} to ${i.range.to}`} ({i.range.days} day{i.range.days === 1 ? '' : 's'}){hp ? `, compared with ${i.range.previousFrom === i.range.previousTo ? i.range.previousFrom : `${i.range.previousFrom} to ${i.range.previousTo}`}` : ''}.
+        {i.range.capped && ' Shown: the latest 12 months.'} Numbers count the questions actually answered, so partly filled checks still show.
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        <Kpi label="Station completion" value={pctText(k.completionPct)} cur={k.completionPct} prev={p.completionPct} goodWhenUp sub={`${k.stationsDone} of ${k.stationsExpected} stations done`} />
-        <Kpi label="Finished on time" value={pctText(k.onTimePct)} cur={k.onTimePct} prev={p.onTimePct} goodWhenUp sub={`${k.shiftsLate} late shift${k.shiftsLate === 1 ? '' : 's'}`} />
-        <Kpi label="Temperature failures" value={String(k.tempFails)} cur={k.tempFails} prev={p.tempFails} goodWhenUp={false} sub="readings outside range" />
-        <Kpi label="Missed stations" value={String(k.missed)} cur={k.missed} prev={p.missed} goodWhenUp={false} sub="not done by the deadline" />
+        <Kpi hasPrev={hp} label="Data filled in" value={pctText(k.coveragePct)} cur={k.coveragePct} prev={p.coveragePct} goodWhenUp sub={`${k.answered} of ${k.expectedAnswers} questions answered`} />
+        <Kpi hasPrev={hp} label="Pass rate" value={pctText(k.passPct)} cur={k.passPct} prev={p.passPct} goodWhenUp sub="of the questions answered" />
+        <Kpi hasPrev={hp} label="Temperature failures" value={String(k.tempFails)} cur={k.tempFails} prev={p.tempFails} goodWhenUp={false} sub="readings outside range" />
+        <Kpi hasPrev={hp} label="Stations not started" value={String(k.notStarted)} cur={k.notStarted} prev={p.notStarted} goodWhenUp={false} sub={`${k.stationsPartial} partly filled · ${k.stationsDone} complete`} />
+        <Kpi hasPrev={hp} label="Finished on time" value={pctText(k.onTimePct)} cur={k.onTimePct} prev={p.onTimePct} goodWhenUp sub={`${k.shiftsLate} late shift${k.shiftsLate === 1 ? '' : 's'}`} />
       </div>
 
       {multiOutlet && (
@@ -160,18 +170,23 @@ export function L3Insights({ i, onPickOutlet }: { i: Ins; onPickOutlet?: (id: st
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead><tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
-                {['Outlet', 'Completion', 'On time', 'Temp fails', 'Missed', 'Avg score'].map((h) => <th key={h} style={{ padding: '6px 8px' }}>{h}</th>)}
+                {['Outlet', 'Data filled', 'Pass rate', 'Temp fails', 'Not started', 'On time'].map((h) => <th key={h} style={{ padding: '6px 8px' }}>{h}</th>)}
               </tr></thead>
               <tbody>
-                {i.byOutlet.map((o) => (
-                  <tr key={o.id} style={{ borderBottom: '1px solid var(--border)', cursor: onPickOutlet ? 'pointer' : undefined }} onClick={() => onPickOutlet?.(o.id)}>
-                    <td style={{ padding: '6px 8px', fontWeight: 600 }}>{o.name}</td>
-                    <td style={{ padding: '6px 8px', minWidth: 120 }}><HBar label="" value={o.completionPct ?? 0} max={100} color={(o.completionPct ?? 0) >= 90 ? GOOD : (o.completionPct ?? 0) >= 70 ? WARN : (BAD as string)} right={pctText(o.completionPct)} /></td>
-                    <td style={{ padding: '6px 8px' }}>{pctText(o.onTimePct)}</td>
-                    <td style={{ padding: '6px 8px', color: o.tempFails ? (BAD as string) : undefined, fontWeight: o.tempFails ? 700 : undefined }}>{o.tempFails}</td>
-                    <td style={{ padding: '6px 8px', color: o.missed ? (BAD as string) : undefined, fontWeight: o.missed ? 700 : undefined }}>{o.missed}</td>
-                    <td style={{ padding: '6px 8px' }}>{pctText(o.avgScore)}</td>
-                  </tr>
+                {locations.map((loc) => (
+                  <>
+                    {locations.length > 1 && <tr key={`l-${loc}`}><td colSpan={6} style={{ padding: '10px 8px 4px', fontWeight: 700, opacity: 0.8 }}>{loc}</td></tr>}
+                    {i.byOutlet.filter((o) => (o.location ?? 'No location') === loc).map((o) => (
+                      <tr key={o.id} style={{ borderBottom: '1px solid var(--border)', cursor: onPickOutlet ? 'pointer' : undefined }} onClick={() => onPickOutlet?.(o.id)}>
+                        <td style={{ padding: '6px 8px', fontWeight: 600 }}>{o.name}</td>
+                        <td style={{ padding: '6px 8px', minWidth: 130 }}><HBar label="" value={o.coveragePct ?? 0} max={100} color={(o.coveragePct ?? 0) >= 90 ? GOOD : (o.coveragePct ?? 0) >= 60 ? WARN : (BAD as string)} right={pctText(o.coveragePct)} /></td>
+                        <td style={{ padding: '6px 8px' }}>{pctText(o.passPct)}</td>
+                        <td style={{ padding: '6px 8px', color: o.tempFails ? (BAD as string) : undefined, fontWeight: o.tempFails ? 700 : undefined }}>{o.tempFails}</td>
+                        <td style={{ padding: '6px 8px', color: o.notStarted ? (BAD as string) : undefined, fontWeight: o.notStarted ? 700 : undefined }}>{o.notStarted}</td>
+                        <td style={{ padding: '6px 8px' }}>{pctText(o.onTimePct)}</td>
+                      </tr>
+                    ))}
+                  </>
                 ))}
               </tbody>
             </table>
@@ -179,39 +194,40 @@ export function L3Insights({ i, onPickOutlet }: { i: Ins; onPickOutlet?: (id: st
         </Card>
       )}
 
-      <Card title="Completion over time" sub="Share of stations finished each day">
-        <TrendChart kind="line" color={BLUE} unit="%" max={100} points={i.daily.map((d) => ({ date: d.date, v: d.completionPct }))} />
+      <Card title="Data filled in, per day" sub="Share of the expected questions that were answered">
+        <TrendChart kind="line" color={BLUE} unit="%" max={100} points={i.daily.map((d) => ({ date: d.date, v: d.coveragePct }))} />
+      </Card>
+      <Card title="Pass rate, per day" sub="How well the answered questions went">
+        <TrendChart kind="line" color={GOOD} unit="%" max={100} points={i.daily.map((d) => ({ date: d.date, v: d.passPct }))} />
       </Card>
       <Card title="Temperature failures per day">
         <TrendChart kind="bars" color={WARN} unit="" max={Math.max(3, ...i.daily.map((d) => d.tempFails))} points={i.daily.map((d) => ({ date: d.date, v: d.tempFails }))} />
       </Card>
 
-      <Card title="Where the time goes">
+      <Card title="Where things stand">
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'space-around' }}>
-          <Donut label="Stations" centre={pctText(k.completionPct)} parts={[{ v: k.stationsDone, c: GOOD, name: 'done' }, { v: k.missed, c: 'var(--locked)', name: 'missed' }]} />
+          <Donut label="Stations" centre={pctText(k.completionPct)} parts={[{ v: k.stationsDone, c: GOOD, name: 'complete' }, { v: k.stationsPartial, c: WARN, name: 'partly filled' }, { v: k.notStarted, c: 'var(--locked)', name: 'not started' }]} />
           <Donut label="Shifts" centre={pctText(k.onTimePct)} parts={[{ v: k.shiftsOnTime, c: GOOD, name: 'on time' }, { v: k.shiftsLate, c: WARN, name: 'late' }]} />
           <Donut label="Failure follow-up" centre={cor.total ? `${Math.round((cor.withComment / cor.total) * 100)}%` : '—'} parts={[{ v: cor.withComment, c: GOOD, name: 'commented' }, { v: Math.max(0, cor.total - cor.withComment), c: 'var(--locked)', name: 'no comment' }]} />
         </div>
         {cor.total > 0 && <div className="desc" style={{ marginTop: 8, textAlign: 'center' }}>{cor.total} temperature failure{cor.total === 1 ? '' : 's'}; {cor.withPhoto} with an after-correction photo.</div>}
       </Card>
 
-      <Card title="Station heatmap" sub="Every station, every day: where checks go wrong">
+      <Card title="Station heatmap" sub="Every station, every day: how much was filled in">
         <Heatmap h={i.heat} />
       </Card>
 
       <Card title="Opening vs Closing">
         {i.byShift.length === 0 ? <div className="empty">No data in this range.</div> : i.byShift.map((s) => (
-          <HBar key={s.label} label={`${s.label} (${s.runs})`} value={s.complete} max={s.complete + s.missed} color={GOOD} right={pctText(s.complete + s.missed ? Math.round((s.complete / (s.complete + s.missed)) * 1000) / 10 : null)} />
+          <HBar key={s.label} label={`${s.label} (${s.runs})`} value={s.coveragePct ?? 0} max={100} color={BLUE} right={pctText(s.coveragePct)} />
         ))}
-        <div className="desc">Share of stations done. Late shifts: {i.byShift.map((s) => `${s.label} ${s.late}`).join(', ') || '—'}.</div>
+        <div className="desc">Share of questions answered. Late shifts: {i.byShift.map((s) => `${s.label} ${s.late}`).join(', ') || '—'}.</div>
       </Card>
 
-      <Card title="Stations needing attention" sub="Missed stations plus temperature failures">
-        {worstStations.filter((s) => s.missed + s.tempFails > 0).length === 0
-          ? <div className="empty">Nothing to flag in this range.</div>
-          : worstStations.filter((s) => s.missed + s.tempFails > 0).map((s) => (
-              <HBar key={s.name} label={s.name} value={s.missed + s.tempFails} max={maxIssue} color={s.tempFails ? WARN : (BAD as string)} right={`${s.missed} missed${s.tempFails ? ` · ${s.tempFails}⚠` : ''}`} />
-            ))}
+      <Card title="Stations needing attention" sub="Not started, partly filled, or with temperature failures">
+        {worst.length === 0 ? <div className="empty">Nothing to flag in this range.</div> : worst.map((s) => (
+          <HBar key={s.name} label={s.name} value={s.issues} max={maxIssue} color={s.tempFails ? WARN : (BAD as string)} right={`${s.notStarted} none · ${s.partial} part${s.tempFails ? ` · ${s.tempFails}⚠` : ''}`} />
+        ))}
       </Card>
 
       <Card title="Products failing most" sub="Temperature out of range">
