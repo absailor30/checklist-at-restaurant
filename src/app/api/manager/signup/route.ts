@@ -18,10 +18,10 @@ export async function POST(request: Request) {
 
   const db = createAdminClient();
   const { data: org } = await db.from('organisations').select('id').ilike('name', brandName.trim()).maybeSingle();
-  if (!org) return NextResponse.json({ error: 'Brand not found — check the exact name with your L3 owner.' }, { status: 404 });
+  if (!org) return NextResponse.json({ error: 'Brand not found — check the exact name with your CEO/Owner.' }, { status: 404 });
 
   const { data: role } = await db.from('roles').select('id').eq('org_id', org.id).eq('name', 'L2 Manager').maybeSingle();
-  if (!role) return NextResponse.json({ error: 'L2 Manager role not found for this brand.' }, { status: 500 });
+  if (!role) return NextResponse.json({ error: 'Operations Manager role not found for this brand.' }, { status: 500 });
 
   const { data: authUser, error: authError } = await db.auth.admin.createUser({
     email: cleanEmail, password, email_confirm: true, user_metadata: { name: name.trim() },

@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   if (!activeShiftsOf(orgRow?.line_check_config).includes(shift)) return json({ error: 'That shift is not used by this brand.' }, { status: 400 });
 
   const { data: role } = await db.from('roles').select('id').eq('org_id', outlet.org_id).eq('name', 'L1 Manager').maybeSingle();
-  if (!role) return json({ error: 'L1 Manager role not found for this brand.' }, { status: 500 });
+  if (!role) return json({ error: 'Manager Line Check role not found for this brand.' }, { status: 500 });
 
   const pinHash = await bcrypt.hash(pin, 10);
   const { data: user, error } = await db

@@ -86,12 +86,12 @@ export async function POST(request: Request) {
     const roleName = Array.isArray(profile.roles) ? profile.roles[0]?.name : (profile.roles as any)?.name;
     const canManage = roleName === 'L3 Owner' || roleName === 'General Manager' || roleName === 'Owner' || roleName === 'Admin';
     if (!canManage) {
-      return NextResponse.json({ error: 'Only L3 can add questions.' }, { status: 403 });
+      return NextResponse.json({ error: 'Only the CEO/Owner can add questions.' }, { status: 403 });
     }
 
     const { level, prompt } = await request.json();
     if ((level !== 'L2' && level !== 'L3') || !prompt || String(prompt).trim().length < 3) {
-      return NextResponse.json({ error: 'A level (L2 or L3) and a prompt are required.' }, { status: 400 });
+      return NextResponse.json({ error: 'A level (Operations Manager or CEO/Owner) and a prompt are required.' }, { status: 400 });
     }
 
     const { data: existing } = await supabase

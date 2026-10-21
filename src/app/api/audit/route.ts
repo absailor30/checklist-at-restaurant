@@ -22,7 +22,7 @@ async function questionsFor(db: ReturnType<typeof createAdminClient>, orgId: str
 export async function GET(request: Request) {
   const manager = await currentManager();
   if (!manager || !manager.approved) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
-  if (manager.level < 2) return NextResponse.json({ error: 'L2 or L3 access required.' }, { status: 403 });
+  if (manager.level < 2) return NextResponse.json({ error: 'Operations Manager or CEO/Owner access required.' }, { status: 403 });
 
   const db = createAdminClient();
   const { data: outlets } = await db.from('outlets').select('id, name, timezone')
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const manager = await currentManager();
   if (!manager || !manager.approved) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
-  if (!(manager.level === 2 || manager.roleName === 'Admin')) return NextResponse.json({ error: 'Only L2 or Admin can fill in the audit.' }, { status: 403 });
+  if (!(manager.level === 2 || manager.roleName === 'Admin')) return NextResponse.json({ error: 'Only the Operations Manager or Admin can fill in the audit.' }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const db = createAdminClient();

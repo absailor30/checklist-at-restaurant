@@ -45,7 +45,7 @@ export default function AdminPendingPage() {
   return (
     <div className="shell" style={{ paddingTop: 40 }}>
       <h2>Pending approvals — all brands</h2>
-      <p className="lede">Approve or reject any L1/L2 signup request, across every brand on the platform.</p>
+      <p className="lede">Approve or reject any Manager Line Check / Operations Manager signup request, across every brand on the platform.</p>
 
       {error && <div className="banner error">{error}</div>}
 

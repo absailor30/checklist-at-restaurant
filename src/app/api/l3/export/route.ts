@@ -7,7 +7,7 @@ export const maxDuration = 30;
 
 const HEADERS = [
   'Date', 'Outlet', 'Shift', 'Stations complete', 'Stations total', 'Filled percent',
-  'L1 percent', 'Band', 'Temperature alerts', 'Missed stations', 'On time', 'Delay reason', 'L2 reviewed', 'L3 reviewed',
+  'Line check percent', 'Band', 'Temperature alerts', 'Missed stations', 'On time', 'Delay reason', 'Operations Manager reviewed', 'CEO/Owner reviewed',
 ];
 
 function csvCell(v: unknown): string {
@@ -18,7 +18,7 @@ function csvCell(v: unknown): string {
 export async function GET(request: Request) {
   const manager = await currentManager();
   if (!manager) return new Response('Not signed in.', { status: 401 });
-  if (!(manager.canManage || manager.canReview)) return new Response('L2 or L3 access required.', { status: 403 });
+  if (!(manager.canManage || manager.canReview)) return new Response('Operations Manager or CEO/Owner access required.', { status: 403 });
 
   const url = new URL(request.url);
   const range = parseRange(url);
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
   return new Response(lines.join('\n'), {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="l3-report-${report.headline.date || 'export'}.csv"`,
+      'Content-Disposition': `attachment; filename="report-${report.headline.date || 'export'}.csv"`,
       'Cache-Control': 'no-store',
     },
   });

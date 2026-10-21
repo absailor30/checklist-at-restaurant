@@ -246,9 +246,9 @@ export default function L3ReportPage() {
 
         {report && (
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: 16 }}>
-            <Stat label="L1 shifts complete today" value={`${report.headline.shiftsL1Complete}/${report.headline.shiftsExpected}`} />
-            <Stat label="Pending L2 review" value={String(report.headline.pendingL2)} warn={report.headline.pendingL2 > 0} />
-            <Stat label="Pending L3 review" value={String(report.headline.pendingL3)} warn={report.headline.pendingL3 > 0} />
+            <Stat label="Manager Line Check shifts complete today" value={`${report.headline.shiftsL1Complete}/${report.headline.shiftsExpected}`} />
+            <Stat label="Pending Operations Manager review" value={String(report.headline.pendingL2)} warn={report.headline.pendingL2 > 0} />
+            <Stat label="Pending CEO/Owner review" value={String(report.headline.pendingL3)} warn={report.headline.pendingL3 > 0} />
             <Stat label="Late today" value={String(report.headline.late)} warn={report.headline.late > 0} />
           </div>
         )}
@@ -274,7 +274,7 @@ export default function L3ReportPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
-                  {['Date', 'Outlet', 'Shift', 'Stations', 'Filled', 'L1 %', 'Band', 'Temp alerts', 'Missed', 'On time', 'Delay reason', 'L2', 'L3'].map((h) => (
+                  {['Date', 'Outlet', 'Shift', 'Stations', 'Filled', 'Line check %', 'Band', 'Temp alerts', 'Missed', 'On time', 'Delay reason', 'Ops Mgr', 'CEO'].map((h) => (
                     <th key={h} style={{ padding: '6px 8px' }}>{h}</th>
                   ))}
                 </tr>

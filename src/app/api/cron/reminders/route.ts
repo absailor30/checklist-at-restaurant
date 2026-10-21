@@ -91,7 +91,7 @@ export async function GET(request: Request) {
             due.push({
               key: DELAYED_KEY, kind: 'delayed',
               title: `${label} check delayed`,
-              body: `${outlet.name}: the ${label} line check is still going past its ${deadline} deadline. L1: add the reason for the delay when you finish.`,
+              body: `${outlet.name}: the ${label} line check is still going past its ${deadline} deadline. Manager Line Check: add the reason for the delay when you finish.`,
             });
           }
         }

@@ -198,7 +198,7 @@ export default function AuditPage() {
               <>
                 <div style={{ fontWeight: 700 }}>{answered} of {questions.length} answered</div>
                 <div className="progress"><div style={{ width: `${questions.length ? (answered / questions.length) * 100 : 0}%` }} /></div>
-                {!(data.canFill ?? data.level === 2) && <div className="desc" style={{ marginTop: 6 }}>Only L2 fills in the audit. You can read it here once it is saved.</div>}
+                {!(data.canFill ?? data.level === 2) && <div className="desc" style={{ marginTop: 6 }}>Only the Operations Manager fills in the audit. You can read it here once it is saved.</div>}
               </>
             )}
           </div>

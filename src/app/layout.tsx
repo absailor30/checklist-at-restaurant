@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { themeBootScript } from '@/components/theme-switcher';
+import { ThemeMenu } from '@/components/theme-menu';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -28,7 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             default one on every page load. */}
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
-      <body>{children}</body>
+      <body>{children}<ThemeMenu /></body>
     </html>
   );
 }

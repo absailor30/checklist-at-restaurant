@@ -81,7 +81,7 @@ export async function POST(request: Request) {
   }
 
   // Create a schedule — L3 only.
-  if (!manager.canManage) return NextResponse.json({ error: 'L3 owner access required.' }, { status: 403 });
+  if (!manager.canManage) return NextResponse.json({ error: 'CEO/Owner access required.' }, { status: 403 });
   const { title, frequency, outletId, dayOfWeek, dayOfMonth } = body;
   if (!title?.trim() || !['daily', 'weekly', 'monthly'].includes(frequency)) {
     return NextResponse.json({ error: 'Title and a valid frequency are required.' }, { status: 400 });

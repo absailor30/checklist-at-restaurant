@@ -32,7 +32,7 @@ export function L3Charts({ rows }: { rows: Row[] }) {
     <div className="viz-root">
       <TrendChart data={trend} />
       <div className="viz-grid">
-        <BarChart title="Average L1 % by outlet" data={outlets} max={100} unit="%" />
+        <BarChart title="Average Manager Line Check % by outlet" data={outlets} max={100} unit="%" />
         <BarChart title="Shifts by score band" data={bands} unit="" integer />
       </div>
     </div>
@@ -52,8 +52,8 @@ function TrendChart({ data }: { data: { date: string; value: number }[] }) {
   const last = data[data.length - 1];
 
   return (
-    <figure className="viz-card" aria-label="Average L1 compliance by day">
-      <figcaption className="viz-title">Average L1 compliance by day</figcaption>
+    <figure className="viz-card" aria-label="Average Manager Line Check compliance by day">
+      <figcaption className="viz-title">Average Manager Line Check compliance by day</figcaption>
       <svg viewBox={`0 0 ${W} ${H}`} className="viz-svg" role="img" onMouseLeave={() => setHover(null)}>
         {ticks.map((t) => (
           <g key={t}>

@@ -11,7 +11,7 @@ export const maxDuration = 30;
 export async function GET(request: Request) {
   const manager = await currentManager();
   if (!manager) return new Response('Not signed in.', { status: 401 });
-  if (!(manager.canManage || manager.canReview)) return new Response('L2 or L3 access required.', { status: 403 });
+  if (!(manager.canManage || manager.canReview)) return new Response('Operations Manager or CEO/Owner access required.', { status: 403 });
 
   const url = new URL(request.url);
   const range = parseRange(url);
@@ -24,18 +24,18 @@ export async function GET(request: Request) {
 
   const pageWidth = 595, pageHeight = 842, margin = 40;
   const cols = [56, 84, 46, 42, 36, 30, 50, 36, 38, 38, 30, 30]; // date, outlet, shift, stations, filled, %, band, temp, missed, ontime, l2, l3 (515 wide)
-  const headers = ['Date', 'Outlet', 'Shift', 'Stations', 'Filled', '%', 'Band', 'Temp', 'Missed', 'On time', 'L2', 'L3'];
+  const headers = ['Date', 'Outlet', 'Shift', 'Stations', 'Filled', '%', 'Band', 'Temp', 'Missed', 'On time', 'Ops', 'CEO'];
   const rowHeight = 16;
 
   let page = pdf.addPage([pageWidth, pageHeight]);
   let y = pageHeight - margin;
 
   const drawHeader = () => {
-    page.drawText(`L3 Report — ${report.orgName}`, { x: margin, y, size: 14, font: bold });
+    page.drawText(`Report — ${report.orgName}`, { x: margin, y, size: 14, font: bold });
     y -= 20;
     page.drawText(
-      `Today (${report.headline.date}): ${report.headline.shiftsL1Complete}/${report.headline.shiftsExpected} L1 shifts complete · ` +
-      `${report.headline.pendingL2} pending L2 · ${report.headline.pendingL3} pending L3 · ${report.headline.late} late`,
+      `Today (${report.headline.date}): ${report.headline.shiftsL1Complete}/${report.headline.shiftsExpected} Manager Line Check shifts complete · ` +
+      `${report.headline.pendingL2} pending Operations Manager · ${report.headline.pendingL3} pending CEO/Owner · ${report.headline.late} late`,
       { x: margin, y, size: 9, font }
     );
     y -= 24;

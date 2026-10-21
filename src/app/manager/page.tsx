@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { CameraCapture } from '@/components/camera-capture';
+import { roleLabel } from '@/lib/labels';
 import { formatCheckTime } from '@/lib/line-check/time';
 import { loginEmail } from '@/lib/login-id';
 
@@ -305,7 +306,7 @@ export default function ManagerDashboard() {
       });
       const data = await res.json();
       if (!res.ok) { setSigMessage(data.error); return; }
-      setSigMessage('Request sent — an L3 owner needs to approve it before you can sign in.');
+      setSigMessage('Request sent — the CEO/Owner needs to approve it before you can sign in.');
       setSigBrand(''); setSigName(''); setSigEmail(''); setSigPassword('');
     } catch {
       setSigMessage('The request did not complete.');
@@ -426,7 +427,7 @@ export default function ManagerDashboard() {
         </form>
 
         <button className="btn btn-ghost" style={{ marginTop: 16 }} onClick={() => { setShowSignup((v) => !v); setSigMessage(''); }}>
-          New L2 manager? Request access
+          New Operations Manager? Request access
         </button>
         {showSignup && (
           <div className="card" style={{ marginTop: 8 }}>
@@ -450,7 +451,7 @@ export default function ManagerDashboard() {
         )}
 
         <a className="btn btn-ghost" href="/l1" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 16, lineHeight: '22px' }}>
-          I'm an L1 manager
+          I'm Manager Line Check staff
         </a>
       </div>
     );
@@ -462,7 +463,7 @@ export default function ManagerDashboard() {
     return (
       <div className="shell" style={{ paddingTop: 32 }}>
         <h2>Waiting for approval</h2>
-        <p className="lede">Your account has been created but an L3 owner still needs to approve it before you can use the dashboard.</p>
+        <p className="lede">Your account has been created but the CEO/Owner still needs to approve it before you can use the dashboard.</p>
         <button className="btn-ghost" style={{ marginTop: 16 }} onClick={handleLogout}>Sign out</button>
       </div>
     );
@@ -474,7 +475,7 @@ export default function ManagerDashboard() {
         <div>
           <h1>Manager Dashboard</h1>
           <div className="sub">
-            {myName || myEmail || 'Signed in'}{role ? ` · ${role}` : ''}
+            {myName || myEmail || 'Signed in'}{role ? ` · ${roleLabel(role)}` : ''}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -485,7 +486,7 @@ export default function ManagerDashboard() {
           )}
           {canReviewL3 && (
             <a className="btn-ghost" href="/manager/l3-checklist" style={{ width: 'auto', minHeight: 40, padding: '8px 14px', display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-              L3 Checklist
+              CEO/Owner Checklist
             </a>
           )}
           {(canReviewL2 || canReviewL3) && (
@@ -504,12 +505,12 @@ export default function ManagerDashboard() {
           <div className="card" style={{ marginBottom: 16 }}>
             <strong>Add a question</strong>
             <p className="lede" style={{ fontSize: 13, margin: '8px 0 12px' }}>
-              Adds a question just for your brand's L2 or L3 review. The standard questions stay as they are for every brand.
+              Adds a question just for your brand's Operations Manager or CEO/Owner review. The standard questions stay as they are for every brand.
             </p>
             {newQMessage && <div className="banner info" style={{ marginBottom: 8 }}>{newQMessage}</div>}
             <div className="btn-row">
-              <button className={newQLevel === 'L2' ? 'btn-primary' : 'btn-ghost'} onClick={() => setNewQLevel('L2')}>L2</button>
-              <button className={newQLevel === 'L3' ? 'btn-primary' : 'btn-ghost'} onClick={() => setNewQLevel('L3')}>L3</button>
+              <button className={newQLevel === 'L2' ? 'btn-primary' : 'btn-ghost'} onClick={() => setNewQLevel('L2')}>Operations Manager</button>
+              <button className={newQLevel === 'L3' ? 'btn-primary' : 'btn-ghost'} onClick={() => setNewQLevel('L3')}>CEO/Owner</button>
             </div>
             <textarea
               style={{ marginTop: 8 }}
@@ -528,7 +529,7 @@ export default function ManagerDashboard() {
             <strong>Team</strong>
             {teamMessage && <div className="banner info" style={{ margin: '8px 0' }}>{teamMessage}</div>}
 
-            <p className="lede" style={{ fontSize: 13, margin: '8px 0 4px' }}>Add an L1 manager</p>
+            <p className="lede" style={{ fontSize: 13, margin: '8px 0 4px' }}>Add Manager Line Check staff</p>
             <input placeholder="Name" value={newL1Name} onChange={(e) => setNewL1Name(e.target.value)} />
             <div className="btn-row" style={{ marginTop: 6 }}>
               {(['morning', 'afternoon', 'evening'] as const).filter((s) => activeShifts.includes(s)).map((s) => (
@@ -541,7 +542,7 @@ export default function ManagerDashboard() {
               {teamOutlets.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
             </select>
             <button className="btn-primary" style={{ marginTop: 8 }} disabled={teamBusy || newL1Name.trim().length < 2} onClick={addL1}>
-              {teamBusy ? 'Adding…' : 'Add L1 manager'}
+              {teamBusy ? 'Adding…' : 'Add Manager Line Check staff'}
             </button>
 
             {team.filter((u: any) => u.isActive && !u.approved).length > 0 && (
@@ -582,7 +583,7 @@ export default function ManagerDashboard() {
         <div className="card" style={{ marginBottom: 16 }}>
           <strong>Recurring schedules</strong>
           <p className="lede" style={{ fontSize: 13, margin: '8px 0 12px' }}>
-            Separate from the daily L1/L2/L3 line check — for weekly audits, monthly deep-cleans, and anything else on its own cadence.
+            Separate from the daily Manager Line Check / Operations Manager / CEO/Owner line check — for weekly audits, monthly deep-cleans, and anything else on its own cadence.
           </p>
 
           {canReviewL3 && (
@@ -637,7 +638,7 @@ export default function ManagerDashboard() {
               <div key={a.id} className="lockbox" style={{ marginTop: 8 }}>
                 <div className="row">
                   <span className="label">{a.outlets?.name ?? ''} · {a.source.toUpperCase()}</span>
-                  <span className="tag warn">{a.assigned_role}</span>
+                  <span className="tag warn">{roleLabel(a.assigned_role)}</span>
                 </div>
                 <div className="desc" style={{ marginTop: 4 }}>{a.description}</div>
                 <button
@@ -686,7 +687,7 @@ export default function ManagerDashboard() {
                   ) : (
                   <>
                   <div style={{ marginTop: 12 }}>
-                    <div className="desc" style={{ marginBottom: 6 }}>L1 Stations</div>
+                    <div className="desc" style={{ marginBottom: 6 }}>Manager Line Check stations</div>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       {Array.from({ length: stationCount }, (_, i) => i + 1).map(stNo => {
                         const st = run.line_check_stations?.find((s: any) => s.station_no === stNo);
@@ -749,17 +750,17 @@ export default function ManagerDashboard() {
                     </div>
                   </div>
 
-                  {run.delay_reason && <div className="banner" style={{ marginTop: 8 }}>⏱ Delay reason (L1): {run.delay_reason}</div>}
+                  {run.delay_reason && <div className="banner" style={{ marginTop: 8 }}>⏱ Delay reason (Manager Line Check): {run.delay_reason}</div>}
                   {run.exceptions?.length > 0 && <ExceptionsPanel exceptions={run.exceptions} stationNames={stationNames} />}
 
                   <div className="lockbox">
                     <div className="row">
-                      <div className="label" style={{ margin: 0, display: 'flex', alignItems: 'center' }}>L2 Review (Manager)</div>
+                      <div className="label" style={{ margin: 0, display: 'flex', alignItems: 'center' }}>Operations Manager Review</div>
                       <div>
                         {l2Complete ? (
                           <span className="tag ok">Completed</span>
                         ) : !l1Complete ? (
-                          <span className="tag plain">Waiting for L1</span>
+                          <span className="tag plain">Waiting for Manager Line Check</span>
                         ) : canReviewL2 ? (
                           <button
                             onClick={() => startReview(run.id, 'L2')}
@@ -769,18 +770,18 @@ export default function ManagerDashboard() {
                             Review
                           </button>
                         ) : (
-                          <span className="tag plain">L2 Manager only</span>
+                          <span className="tag plain">Operations Manager only</span>
                         )}
                       </div>
                     </div>
                     {canReviewL3 && (
                     <div className="row" style={{ marginTop: 8 }}>
-                      <div className="label" style={{ margin: 0, display: 'flex', alignItems: 'center' }}>L3 Review (Area)</div>
+                      <div className="label" style={{ margin: 0, display: 'flex', alignItems: 'center' }}>CEO/Owner Review</div>
                       <div>
                         {l3Complete ? (
                           <span className="tag ok">Completed</span>
                         ) : !l2Complete ? (
-                          <span className="tag plain">Waiting for L2</span>
+                          <span className="tag plain">Waiting for Operations Manager</span>
                         ) : canReviewL3 ? (
                           <button
                             onClick={() => startReview(run.id, 'L3')}
@@ -790,7 +791,7 @@ export default function ManagerDashboard() {
                             Review
                           </button>
                         ) : (
-                          <span className="tag plain">L3 Owner only</span>
+                          <span className="tag plain">CEO/Owner only</span>
                         )}
                       </div>
                     </div>

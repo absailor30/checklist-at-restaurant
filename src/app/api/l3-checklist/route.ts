@@ -12,7 +12,7 @@ const canFill = (m: { canManage: boolean; roleName: string }) => m.canManage || 
 export async function GET(request: Request) {
   const manager = await currentManager();
   if (!manager || !manager.approved) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
-  if (!(manager.level >= 3 || manager.roleName === 'Admin')) return NextResponse.json({ error: 'The L3 checklist is for L3 only.' }, { status: 403 });
+  if (!(manager.level >= 3 || manager.roleName === 'Admin')) return NextResponse.json({ error: 'The CEO/Owner checklist is for the CEO/Owner only.' }, { status: 403 });
 
   const db = createAdminClient();
   const { data: outlets } = await db.from('outlets').select('id, name, timezone').eq('org_id', manager.orgId).eq('is_active', true).order('name');
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const manager = await currentManager();
   if (!manager || !manager.approved) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
-  if (!canFill(manager)) return NextResponse.json({ error: 'Only L3 can fill in this checklist.' }, { status: 403 });
+  if (!canFill(manager)) return NextResponse.json({ error: 'Only the CEO/Owner can fill in this checklist.' }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const db = createAdminClient();

@@ -39,7 +39,7 @@ function BrandOnboarding() {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
-      setResult(`Created "${brandName}" — ${data.outlets.length} outlets, ${data.l1Count} L1 managers.`);
+      setResult(`Created "${brandName}" — ${data.outlets.length} outlets, ${data.l1Count} Manager Line Check staff.`);
     } catch {
       setError('The request did not complete.');
     } finally {
@@ -57,7 +57,7 @@ function BrandOnboarding() {
       const res = await fetch('/api/onboard/excel', { method: 'POST', body: form });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
-      setResult(`Created brand — ${data.outlets.length} outlets, ${data.l1Count} L1 managers.`);
+      setResult(`Created brand — ${data.outlets.length} outlets, ${data.l1Count} Manager Line Check staff.`);
     } catch {
       setError('The request did not complete.');
     } finally {
@@ -70,9 +70,9 @@ function BrandOnboarding() {
     <div className="card">
       <strong>Onboard a new brand</strong>
       <p className="lede" style={{ fontSize: 13, margin: '8px 0 12px' }}>
-        A brand gets its outlets, each with 3 stations and one L1 manager per
-        shift (morning/afternoon/evening), plus one L2 manager and one L3
-        owner covering every outlet. For more than a few outlets, or when
+        A brand gets its outlets, each with 3 stations and one Manager Line Check person per
+        shift (morning/afternoon/evening), plus one Operations Manager and one CEO/Owner
+        covering every outlet. For more than a few outlets, or when
         stations or shift-manager names differ per outlet, use the Excel
         upload instead — download the{' '}
         <a href="/onboarding-template.xlsx">template</a>, fill it in, and
@@ -104,12 +104,12 @@ function BrandOnboarding() {
         <input type="number" min={1} max={3} value={stationCount}
           onChange={(e) => setStationCount(Math.max(1, Math.min(3, Number(e.target.value) || 3)))} />
 
-        <label style={{ marginTop: 12 }}>L2 manager</label>
+        <label style={{ marginTop: 12 }}>Operations Manager</label>
         <input placeholder="Name" value={l2Name} onChange={(e) => setL2Name(e.target.value)} required />
         <input placeholder="Email" type="email" value={l2Email} onChange={(e) => setL2Email(e.target.value)} required style={{ marginTop: 6 }} />
         <input placeholder="Password (10+ chars)" type="password" value={l2Password} onChange={(e) => setL2Password(e.target.value)} required style={{ marginTop: 6 }} />
 
-        <label style={{ marginTop: 12 }}>L3 owner</label>
+        <label style={{ marginTop: 12 }}>CEO/Owner</label>
         <input placeholder="Name" value={l3Name} onChange={(e) => setL3Name(e.target.value)} required />
         <input placeholder="Email" type="email" value={l3Email} onChange={(e) => setL3Email(e.target.value)} required style={{ marginTop: 6 }} />
         <input placeholder="Password (10+ chars)" type="password" value={l3Password} onChange={(e) => setL3Password(e.target.value)} required style={{ marginTop: 6 }} />

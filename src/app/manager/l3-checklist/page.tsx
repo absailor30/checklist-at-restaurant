@@ -68,7 +68,7 @@ export default function L3ChecklistPage() {
   if (session === 'out') {
     return (
       <div className="shell" style={{ paddingTop: 32 }}>
-        <h2>L3 Checklist sign in</h2>
+        <h2>CEO/Owner Checklist sign in</h2>
         <p className="lede">Same account as the manager dashboard.</p>
         {loginError && <div className="banner error">{loginError}</div>}
         <form className="card" onSubmit={login}>
@@ -90,7 +90,7 @@ export default function L3ChecklistPage() {
     <>
       <div className="topbar">
         <div>
-          <h1>L3 Checklist</h1>
+          <h1>CEO/Owner Checklist</h1>
           <div className="sub">{data ? `${data.outletName} · ${monthName(data.today)}` : ''}</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -106,7 +106,7 @@ export default function L3ChecklistPage() {
             {data.outlets.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
           </select>
         )}
-        {data && !data.canFill && <div className="banner">Only L3 fills in this checklist. You can read the entries below.</div>}
+        {data && !data.canFill && <div className="banner">Only the CEO/Owner fills in this checklist. You can read the entries below.</div>}
         {data && doneToday && data.canFill && <div className="banner">This month's checklist is saved. You can change it and save again.</div>}
 
         {data && data.canFill && items.map((it) => {

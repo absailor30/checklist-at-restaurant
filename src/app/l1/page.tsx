@@ -7,6 +7,7 @@ import { formatCheckTime } from '@/lib/line-check/time';
 import { canAdvance, describeRange, inRange, isOutOfRange, scoreAnswer, type LineCheckAnswer, type YesNoNa } from '@/lib/line-check/score-answer';
 import { bandOf } from '@/lib/scoring';
 import { ThemeSwitcher } from '@/components/theme-switcher';
+import { roleLabel } from '@/lib/labels';
 import { NotificationBell } from '@/components/notifications';
 import { DeadlineCountdown } from '@/components/deadline-countdown';
 import { CameraCapture } from '@/components/camera-capture';
@@ -376,7 +377,7 @@ export default function StaffLineCheckPage() {
 
   async function pauseStation(id: number) {
     if (!pauseDraft.trim()) {
-      setError('Pause needs a reason so L3 can see why the station stalled.');
+      setError('Pause needs a reason so the CEO/Owner can see why the station stalled.');
       return;
     }
     const success = await syncStation(id, 'paused', pauseDraft.trim());
@@ -470,13 +471,13 @@ export default function StaffLineCheckPage() {
             <span>
               <span className="name">{s.name}</span>
               <span className="meta">
-                {s.role}{s.shift ? ` · ${outlet?.shift_labels?.[s.shift] ?? s.shift} shift` : ''}{s.needsPin ? ' · set your PIN' : ''}
+                {roleLabel(s.role)}{s.shift ? ` · ${outlet?.shift_labels?.[s.shift] ?? s.shift} shift` : ''}{s.needsPin ? ' · set your PIN' : ''}
               </span>
             </span>
             <span className="chev">›</span>
           </button>
         ))}
-        {staff.length === 0 && <p className="empty">No L1 managers set up for this outlet yet.</p>}
+        {staff.length === 0 && <p className="empty">No Manager Line Check staff set up for this outlet yet.</p>}
         <button className="btn btn-ghost" style={{ marginTop: 16 }} onClick={() => { setError(null); setStep('request'); }}>
           New here? Request access
         </button>
@@ -628,7 +629,7 @@ export default function StaffLineCheckPage() {
       <div className="topbar">
         <div>
           <h1>{me?.name}</h1>
-          <div className="sub">{me?.role} · {outlet?.name}</div>
+          <div className="sub">{roleLabel(me?.role)} · {outlet?.name}</div>
         </div>
         <div className="bellrow">
           <NotificationBell />
@@ -639,7 +640,7 @@ export default function StaffLineCheckPage() {
 
       <div className="shell">
         <header style={{ marginBottom: 20 }}>
-          <h1>Line check — L1</h1>
+          <h1>Manager Line Check</h1>
           <div className="sub">
             {bank?.own ? 'Stations independent' : 'Sample bank for review'}
             {bank?.hardStop ? ` · deadline ${formatCheckTime(bank.hardStop) ?? bank.hardStop}` : ''}
@@ -668,7 +669,7 @@ export default function StaffLineCheckPage() {
             <textarea id="delayReason" rows={3} value={delayReason} disabled={delaySaved}
               onChange={(e) => setDelayReason(e.target.value)} placeholder="e.g. short-staffed, delivery arrived late" />
             {delaySaved
-              ? <p className="lede" style={{ marginTop: 8 }}>Reason saved. L2 and L3 can see it.</p>
+              ? <p className="lede" style={{ marginTop: 8 }}>Reason saved. The Operations Manager and CEO/Owner can see it.</p>
               : <button className="btn-primary" style={{ marginTop: 8 }} onClick={saveDelayReason}>Save reason</button>}
           </div>
         )}
@@ -858,7 +859,7 @@ function QuestionCard({
 
       {outOfRange && (
         <div className="banner error" style={{ marginTop: 12 }}>
-          <strong>Outside the acceptable range</strong> ({describeRange(q)}) — flagged for L2 and L3.
+          <strong>Outside the acceptable range</strong> ({describeRange(q)}) — flagged for the Operations Manager and CEO/Owner.
           Add what you did to correct it in the comments before moving on.
         </div>
       )}
