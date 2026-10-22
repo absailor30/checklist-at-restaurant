@@ -565,7 +565,7 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
                   <div key={u.id} className="lockbox" style={{ marginTop: 6 }}>
                     <div className="row">
                       <span className="label">{u.name}</span>
-                      <span className="tag warn">{u.role}{u.shift ? ` · ${u.shift}` : ''}</span>
+                      <span className="tag warn">{roleLabel(u.role)}{u.shift ? ` · ${shiftLabels[u.shift] ?? u.shift}` : ''}</span>
                     </div>
                     <div className="desc">{u.outlets.join(', ') || 'No outlet'}</div>
                     <div className="btn-row" style={{ marginTop: 6 }}>
@@ -582,7 +582,7 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
               <div key={u.id} className="lockbox" style={{ marginTop: 6 }}>
                 <div className="row">
                   <span className="label">{u.name}</span>
-                  <span className="tag plain">{u.role}{u.shift ? ` · ${u.shift}` : ''}</span>
+                  <span className="tag plain">{roleLabel(u.role)}{u.shift ? ` · ${shiftLabels[u.shift] ?? u.shift}` : ''}</span>
                 </div>
                 <div className="desc">{u.outlets.join(', ') || 'No outlet'}</div>
                 <button className="btn-ghost" style={{ marginTop: 6, width: 'auto' }} onClick={() => deactivateUser(u.id)}>
@@ -655,7 +655,7 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
             {actions.map((a) => (
               <div key={a.id} className="lockbox" style={{ marginTop: 8 }}>
                 <div className="row">
-                  <span className="label">{a.outlets?.name ?? ''} · {a.source.toUpperCase()}</span>
+                  <span className="label">{a.outlets?.name ?? ''} · {({ l1: 'Manager Line Check', l2: 'Operations Manager', l3: 'CEO/Owner' } as Record<string, string>)[String(a.source).toLowerCase()] ?? String(a.source).toUpperCase()}</span>
                   <span className="tag warn">{roleLabel(a.assigned_role)}</span>
                 </div>
                 <div className="desc" style={{ marginTop: 4 }}>{a.description}</div>

@@ -452,3 +452,6 @@ label { display: block; font-size: 14px; font-weight: 600; margin: 14px 0 6px; }
 .viz-bar-track { height: 16px; background: transparent; }
 .viz-bar { height: 16px; background: var(--viz-series); border-radius: 0 4px 4px 0; }
 .viz-bar-value { color: var(--text); font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
+
+/* Header buttons stay on one line on narrow screens. */
+.topbar button, .topbar a.btn-ghost { white-space: nowrap; }

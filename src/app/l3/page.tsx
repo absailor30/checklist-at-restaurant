@@ -236,19 +236,19 @@ export default function L3ReportPage() {
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-          <a className="btn btn-ghost" href={`/api/l3/export?${exportQuery}`} style={{ textAlign: 'center', textDecoration: 'none' }}>Export CSV</a>
-          <a className="btn btn-ghost" href={`/api/l3/export/pdf?${exportQuery}`} style={{ textAlign: 'center', textDecoration: 'none' }}>Export PDF</a>
+          <a className="btn btn-ghost" href={`/api/l3/export?${exportQuery}`} style={{ width: 'auto', minHeight: 40, padding: '8px 14px', textAlign: 'center', textDecoration: 'none' }}>Export CSV</a>
+          <a className="btn btn-ghost" href={`/api/l3/export/pdf?${exportQuery}`} style={{ width: 'auto', minHeight: 40, padding: '8px 14px', textAlign: 'center', textDecoration: 'none' }}>Export PDF</a>
           {['L2 Manager', 'Shift Manager', 'Admin'].includes(report?.viewerRole ?? '') && (
-            <a className="btn btn-ghost" href="/manager/fssai-audit" style={{ textAlign: 'center', textDecoration: 'none' }}>FSSAI Audit</a>
+            <a className="btn btn-ghost" href="/manager/fssai-audit" style={{ width: 'auto', minHeight: 40, padding: '8px 14px', textAlign: 'center', textDecoration: 'none' }}>FSSAI Audit</a>
           )}
           {['L3 Owner', 'General Manager', 'Owner', 'Admin'].includes(report?.viewerRole ?? '') && (
-            <a className="btn btn-ghost" href="/manager/l3-checklist" style={{ textAlign: 'center', textDecoration: 'none' }}>Audit</a>
+            <a className="btn btn-ghost" href="/manager/l3-checklist" style={{ width: 'auto', minHeight: 40, padding: '8px 14px', textAlign: 'center', textDecoration: 'none' }}>Audit</a>
           )}
         </div>
 
         {report && (
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: 16 }}>
-            <Stat label="Manager Line Check shifts complete today" value={`${report.headline.shiftsL1Complete}/${report.headline.shiftsExpected}`} />
+            <Stat label="Shifts complete today" value={`${report.headline.shiftsL1Complete}/${report.headline.shiftsExpected}`} />
             <Stat label="Pending Operations Manager review" value={String(report.headline.pendingL2)} warn={report.headline.pendingL2 > 0} />
             <Stat label="Pending CEO/Owner review" value={String(report.headline.pendingL3)} warn={report.headline.pendingL3 > 0} />
             <Stat label="Late today" value={String(report.headline.late)} warn={report.headline.late > 0} />

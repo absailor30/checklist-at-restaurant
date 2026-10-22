@@ -90,7 +90,7 @@ export default function L3ChecklistPage() {
     <>
       <div className="topbar">
         <div>
-          <h1>CEO/Owner Checklist</h1>
+          <h1>{!data && error ? 'Not available' : 'CEO/Owner Checklist'}</h1>
           <div className="sub">{data ? `${data.outletName} · ${monthName(data.today)}` : ''}</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
