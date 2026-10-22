@@ -1,7 +1,6 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { ManagerApp } from '@/components/manager-app';
-
-export default function Page() {
-  return <ManagerApp view="questions" />;
+// This page moved; keep the old link working.
+export default function Moved() {
+  redirect('/l3/add-questions');
 }

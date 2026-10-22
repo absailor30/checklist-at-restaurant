@@ -477,7 +477,7 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
     <>
       <div className="topbar">
         <div>
-          <h1>{view === 'questions' ? 'Add a question' : view === 'schedules' ? 'Recurring schedules' : 'Manager Dashboard'}</h1>
+          <h1>{view === 'questions' ? 'Add a question' : view === 'schedules' ? 'Custom Check' : 'Manager Dashboard'}</h1>
           <div className="sub">
             {myName || myEmail || 'Signed in'}{role ? ` · ${roleLabel(role)}` : ''}
           </div>
@@ -493,10 +493,10 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
                 (canReviewL2 || canReviewL3) && { href: '/l3', label: 'Report' },
                 canReviewL2 && { href: '/manager/fssai-audit', label: 'FSSAI Audit' },
                 canReviewL3 && { href: '/manager/l3-checklist', label: 'CEO/Owner Checklist' },
-                { href: '/manager/schedules', label: 'Recurring schedules' },
-                canReviewL3 && { href: '/manager/questions', label: 'Add a question' },
+                { href: '/l3/add-custom-check', label: 'Custom Check' },
+                canReviewL3 && { href: '/l3/add-questions', label: 'Add a question' },
               ].filter(Boolean).map((item: any) => (
-                <a key={item.href} href={item.href} style={{ display: 'block', padding: '10px 12px', textDecoration: 'none', color: 'inherit', borderRadius: 8, fontWeight: view !== 'dashboard' && item.href === `/manager/${view}` ? 700 : 400 }}>
+                <a key={item.href} href={item.href} style={{ display: 'block', padding: '10px 12px', textDecoration: 'none', color: 'inherit', borderRadius: 8, fontWeight: (view === 'questions' && item.href === '/l3/add-questions') || (view === 'schedules' && item.href === '/l3/add-custom-check') ? 700 : 400 }}>
                   {item.label}
                 </a>
               ))}
@@ -510,8 +510,8 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
 
       <div className="shell">
         {view === 'dashboard' && schedules.filter((x) => x.due && !x.completed).length > 0 && (
-          <a href="/manager/schedules" className="banner info" style={{ display: 'block', textDecoration: 'none', color: 'inherit', marginBottom: 12 }}>
-            {schedules.filter((x) => x.due && !x.completed).length} recurring task{schedules.filter((x) => x.due && !x.completed).length === 1 ? '' : 's'} due now — open
+          <a href="/l3/add-custom-check" className="banner info" style={{ display: 'block', textDecoration: 'none', color: 'inherit', marginBottom: 12 }}>
+            {schedules.filter((x) => x.due && !x.completed).length} custom check{schedules.filter((x) => x.due && !x.completed).length === 1 ? '' : 's'} due now — open
           </a>
         )}
         {view === 'questions' && canReviewL3 && (
@@ -595,7 +595,7 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
 
         {view === 'schedules' && (
         <div className="card" style={{ marginBottom: 16 }}>
-          <strong>Recurring schedules</strong>
+          <strong>Custom Check</strong>
           <p className="lede" style={{ fontSize: 13, margin: '8px 0 12px' }}>
             Separate from the daily line check — for weekly audits, monthly deep-cleans, and anything else on its own cadence. The CEO/Owner sets up a task once; on the day it is due it shows under "Due now" for the managers, who tap "Mark done" when it is finished.
           </p>
