@@ -119,14 +119,21 @@ export async function GET(request: Request) {
 
           const { data: staff } = await db.from('user_outlets')
             .select('users!inner(id, is_active, roles!inner(level))').eq('outlet_id', outlet.id);
-          const ids = (staff ?? [])
+          const people = (staff ?? [])
             .map((r: any) => (Array.isArray(r.users) ? r.users[0] : r.users))
-            .filter((u: any) => u?.is_active && (d.kind !== 'start' || (Array.isArray(u.roles) ? u.roles[0] : u.roles)?.level === 1))
-            .map((u: any) => u.id);
+            .filter((u: any) => u?.is_active)
+            .map((u: any) => ({ id: u.id as string, level: (Array.isArray(u.roles) ? u.roles[0] : u.roles)?.level as number }))
+            .filter((u: any) => d.kind !== 'start' || u.level === 1);
 
-          const n = await pushToUsers(db, ids, {
-            title: d.title, body: d.body, url: '/l1', tag: `${d.kind}-${outlet.id}-${shift}-${d.key}`,
-          });
+          // Each level opens its own page: staff the check screen, Operations Manager the dashboard, CEO/Owner the corrective actions.
+          let n = 0;
+          for (const [level, url] of [[1, '/l1'], [2, '/manager'], [3, '/l3/actions']] as const) {
+            const ids = people.filter((u) => u.level === level).map((u) => u.id);
+            if (!ids.length) continue;
+            n += await pushToUsers(db, ids, {
+              title: d.title, body: d.body, url, tag: `${d.kind}-${outlet.id}-${shift}-${d.key}`,
+            });
+          }
           sent.push(`${outlet.name} ${label} ${d.kind} ${d.key} -> ${n}`);
         }
       }
