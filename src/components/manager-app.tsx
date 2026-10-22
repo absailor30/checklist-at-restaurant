@@ -14,7 +14,7 @@ const SHIFTS = [
   { id: 'evening', label: 'Evening shift' },
 ] as const;
 
-export type ManagerView = 'dashboard' | 'questions' | 'schedules';
+export type ManagerView = 'dashboard' | 'actions' | 'signin' | 'questions' | 'schedules';
 
 // One component serves the dashboard and its two side pages, so sign-in and data loading are shared.
 export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
@@ -99,14 +99,10 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
       setMyName(data.name || null);
       setMyEmail(data.email || null);
       setApproved(data.approved !== false);
-      try {
-        if (sessionStorage.getItem('goHome') && ['L3 Owner', 'General Manager', 'Owner'].includes(data.role)) {
-          sessionStorage.removeItem('goHome');
-          window.location.replace('/l3');
-          return;
-        }
-        sessionStorage.removeItem('goHome');
-      } catch {}
+      if (view === 'signin' && data.role) {
+        window.location.replace(['L3 Owner', 'General Manager', 'Owner'].includes(data.role) ? '/l3' : '/manager');
+        return;
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -302,11 +298,9 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
     e.preventDefault();
     setLoginBusy(true);
     setLoginError('');
-    try { sessionStorage.setItem('goHome', '1'); } catch {}
     const { error } = await supabase.auth.signInWithPassword({ email: loginEmail(email), password });
     setLoginBusy(false);
     if (error) setLoginError(error.message);
-    if (error) try { sessionStorage.removeItem('goHome'); } catch {}
   };
 
   const submitSignup = async () => {
@@ -398,10 +392,12 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
 
   if (sessionState === 'checking') return <div className="shell" style={{ paddingTop: 32 }}><div className="spinner" /></div>;
 
+  if (view === 'signin' && sessionState === 'in') return <div className="shell" style={{ paddingTop: 32 }}><div className="spinner" /></div>;
+
   if (sessionState === 'out') {
     return (
       <div className="shell" style={{ paddingTop: 32 }}>
-        <h2>Manager sign in</h2>
+        <h2>Sign in</h2>
         <p className="lede">
           Managers sign in with an email and password, not a PIN — approvals and
           unlocks are recorded against your name permanently.
@@ -487,7 +483,7 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
     <>
       <div className="topbar">
         <div>
-          <h1>{view === 'questions' ? 'Add a question' : view === 'schedules' ? 'Custom Check' : 'Manager Dashboard'}</h1>
+          <h1>{view === 'questions' ? 'Add a question' : view === 'schedules' ? 'Custom Check' : view === 'actions' ? 'Corrective actions' : 'Manager Dashboard'}</h1>
           <div className="sub">
             {myName || myEmail || 'Signed in'}{role ? ` · ${roleLabel(role)}` : ''}
           </div>
@@ -499,7 +495,9 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
           {menuOpen && (
             <div className="card" style={{ position: 'absolute', top: '100%', right: 0, marginTop: 6, padding: 6, minWidth: 220, zIndex: 40, boxShadow: '0 4px 16px rgba(0,0,0,.25)' }}>
               {[
-                view !== 'dashboard' && { href: '/manager', label: role === 'Admin' ? 'Dashboard & Team' : canReviewL3 ? 'Corrective actions' : 'Dashboard' },
+                role === 'Admin' ? view !== 'dashboard' && { href: '/manager', label: 'Dashboard & Team' }
+                  : canReviewL3 ? view !== 'actions' && { href: '/l3/actions', label: 'Corrective actions' }
+                  : view !== 'dashboard' && { href: '/manager', label: 'Dashboard' },
                 (canReviewL2 || canReviewL3) && { href: '/l3', label: 'Report' },
                 canReviewL2 && { href: '/manager/fssai-audit', label: 'FSSAI Audit' },
                 canReviewL3 && { href: '/manager/l3-checklist', label: 'CEO/Owner Checklist' },
@@ -519,7 +517,7 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
       </div>
 
       <div className="shell">
-        {view === 'dashboard' && schedules.filter((x) => x.due && !x.completed).length > 0 && (
+        {(view === 'dashboard' || view === 'actions') && schedules.filter((x) => x.due && !x.completed).length > 0 && (
           <a href="/l3/add-custom-check" className="banner info" style={{ display: 'block', textDecoration: 'none', color: 'inherit', marginBottom: 12 }}>
             {schedules.filter((x) => x.due && !x.completed).length} custom check{schedules.filter((x) => x.due && !x.completed).length === 1 ? '' : 's'} due now — open
           </a>
@@ -659,7 +657,7 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
 
         {view === 'questions' && !canReviewL3 && <p className="empty">Only the CEO/Owner can add questions.</p>}
 
-        {view === 'dashboard' && actions.length > 0 && (
+        {(view === 'dashboard' || view === 'actions') && actions.length > 0 && (
           <div className="card" style={{ marginBottom: 16 }}>
             <strong>Corrective actions ({actions.length} open)</strong>
             {actions.map((a) => (
@@ -681,9 +679,9 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
           </div>
         )}
 
-        {view === 'dashboard' && outlets.length === 0 && <p className="empty">No outlets found.</p>}
+        {(view === 'dashboard' || view === 'actions') && outlets.length === 0 && <p className="empty">No outlets found.</p>}
 
-        {view === 'dashboard' && outlets.map(outlet => {
+        {(view === 'dashboard' || view === 'actions') && outlets.map(outlet => {
           const runs = outlet.line_check_runs || [];
 
           return (

@@ -146,7 +146,7 @@ export default function OnboardPage() {
         </button>
       </form>
 
-      <a className="btn btn-ghost" href="/manager"
+      <a className="btn btn-ghost" href="/sign-in"
          style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 10 }}>
         I already have an account
       </a>

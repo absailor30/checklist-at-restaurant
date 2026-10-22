@@ -134,7 +134,7 @@ export default function L3ReportPage() {
   if (sessionState === 'out') {
     return (
       <div className="shell" style={{ paddingTop: 32 }}>
-        <h2>Report sign in</h2>
+        <h2>Sign in</h2>
         <p className="lede">Same account as the manager dashboard.</p>
         {loginError && <div className="banner error">{loginError}</div>}
         <form className="card" onSubmit={handleLogin}>
@@ -148,8 +148,8 @@ export default function L3ReportPage() {
             {loginBusy ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
-        <a className="btn btn-ghost" href="/manager" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 16, lineHeight: '22px' }}>
-          Go to manager reviews
+        <a className="btn btn-ghost" href="/sign-in" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 16, lineHeight: '22px' }}>
+          Go to the main sign-in
         </a>
       </div>
     );
@@ -169,8 +169,8 @@ export default function L3ReportPage() {
           {menuOpen && (
             <div className="card" style={{ position: 'absolute', top: '100%', right: 0, marginTop: 6, padding: 6, minWidth: 220, zIndex: 40, boxShadow: '0 4px 16px rgba(0,0,0,.25)' }}>
               {[
-                isL2 && { href: '/manager', label: 'Dashboard' },
-                isL3 && { href: '/manager', label: isAdmin ? 'Dashboard & Team' : 'Corrective actions' },
+                isL2 && !isAdmin && { href: '/manager', label: 'Dashboard' },
+                isL3 && { href: isAdmin ? '/manager' : '/l3/actions', label: isAdmin ? 'Dashboard & Team' : 'Corrective actions' },
                 isL2 && { href: '/manager/fssai-audit', label: 'FSSAI Audit' },
                 isL3 && { href: '/manager/l3-checklist', label: 'CEO/Owner Checklist' },
                 { href: '/l3/add-custom-check', label: 'Custom Check' },

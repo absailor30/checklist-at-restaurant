@@ -64,7 +64,7 @@ export default function ManagePage() {
             ? 'Sign in with your manager account to manage staff.'
             : error}
         </p>
-        <a className="btn btn-primary" href="/manager"
+        <a className="btn btn-primary" href="/sign-in"
            style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
           Go to sign in
         </a>

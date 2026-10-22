@@ -481,9 +481,9 @@ export default function StaffLineCheckPage() {
         <button className="btn btn-ghost" style={{ marginTop: 16 }} onClick={() => { setError(null); setStep('request'); }}>
           New here? Request access
         </button>
-        <a className="btn btn-ghost" href="/manager"
+        <a className="btn btn-ghost" href="/sign-in"
           style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 8 }}>
-          Manager sign in
+          Sign in (managers)
         </a>
       </Screen>
     );
