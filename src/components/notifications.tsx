@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { fmtDate } from '@/lib/format';
 
 // The notification bell.
 //
@@ -258,5 +259,5 @@ function when(iso: string): string {
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins} min ago`;
   if (mins < 24 * 60) return `${Math.floor(mins / 60)}h ago`;
-  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  return fmtDate(iso);
 }

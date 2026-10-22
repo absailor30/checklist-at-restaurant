@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { currentManager } from '@/lib/supabase/server';
 import { buildL3Report, parseRange } from '@/lib/l3-report';
+import { fmtDate } from '@/lib/format';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 export const dynamic = 'force-dynamic';
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
     page.drawText(`Report — ${report.orgName}`, { x: margin, y, size: 14, font: bold });
     y -= 20;
     page.drawText(
-      `Today (${report.headline.date}): ${report.headline.shiftsL1Complete}/${report.headline.shiftsExpected} Manager Line Check shifts complete · ` +
+      `Today (${fmtDate(report.headline.date)}): ${report.headline.shiftsL1Complete}/${report.headline.shiftsExpected} Manager Line Check shifts complete · ` +
       `${report.headline.pendingL2} pending Operations Manager · ${report.headline.pendingL3} pending CEO/Owner · ${report.headline.late} late`,
       { x: margin, y, size: 9, font }
     );
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
       drawHeader();
     }
     const cells = [
-      r.date, r.outletName.slice(0, 16), r.shift, `${r.stationsComplete}/${r.stationCount}`,
+      fmtDate(r.date), r.outletName.slice(0, 16), r.shift, `${r.stationsComplete}/${r.stationCount}`,
       r.filledPct === null || r.filledPct === undefined ? '—' : `${r.filledPct}%`,
       r.percent?.toString() ?? '—', r.band ?? '—',
       r.outOfRange ? String(r.outOfRange) : '—', r.missed ? String(r.missed) : '—',

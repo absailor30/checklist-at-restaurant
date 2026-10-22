@@ -1,9 +1,10 @@
 'use client';
 
 import type { L3Insights as Ins, Kpis, HeatCell } from '@/lib/l3-report';
+import { fmtDate, fmtDayMonth, fmtNum } from '@/lib/format';
 
 const GOOD = '#22c55e', WARN = '#f59e0b', BAD = 'var(--locked)', BLUE = '#3b82f6', GREY = 'rgba(128,128,128,.22)';
-const dm = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+const dm = (d: string) => fmtDayMonth(d);
 const pctText = (n: number | null) => (n === null ? '—' : `${n}%`);
 
 function Card({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
@@ -60,8 +61,8 @@ function TrendChart({ points, max, unit, color, kind }: { points: { date: string
       {kind === 'line' && defined.length > 1 && <path d={`${line} L${x(defined[defined.length - 1].i)},${y(0)} L${x(defined[0].i)},${y(0)} Z`} fill={color} opacity="0.12" />}
       {kind === 'line' && <path d={line} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" />}
       {points.map((p, i) => p.v === null ? null : kind === 'line'
-        ? <circle key={i} cx={x(i)} cy={y(p.v)} r="3.5" fill={color}><title>{`${dm(p.date)}: ${p.v}${unit}`}</title></circle>
-        : <rect key={i} x={x(i) - bw / 2} y={y(p.v)} width={bw} height={Math.max(0, y(0) - y(p.v))} rx="3" fill={p.v > 0 ? color : GREY}><title>{`${dm(p.date)}: ${p.v}${unit}`}</title></rect>)}
+        ? <circle key={i} cx={x(i)} cy={y(p.v)} r="3.5" fill={color}><title>{`${fmtDate(p.date)}: ${fmtNum(p.v)}${unit}`}</title></circle>
+        : <rect key={i} x={x(i) - bw / 2} y={y(p.v)} width={bw} height={Math.max(0, y(0) - y(p.v))} rx="3" fill={p.v > 0 ? color : GREY}><title>{`${fmtDate(p.date)}: ${fmtNum(p.v)}${unit}`}</title></rect>)}
       {points.map((p, i) => i % step === 0 && <text key={p.date} x={x(i)} y={H - 6} textAnchor="middle" fontSize="9" fill="currentColor" opacity="0.7">{dm(p.date)}</text>)}
     </svg>
   );
@@ -104,7 +105,7 @@ function Heatmap({ h }: { h: Ins['heat'] }) {
     <div style={{ overflowX: 'auto' }}>
       <table style={{ borderCollapse: 'separate', borderSpacing: 2, fontSize: 11 }}>
         <thead>
-          <tr><th />{h.dates.map((d, i) => <th key={d} style={{ fontWeight: 400, opacity: 0.7, minWidth: 18 }}>{i % 2 === 0 ? dm(d).slice(0, 2) : ''}</th>)}</tr>
+          <tr><th />{h.dates.map((d, i) => <th key={d} style={{ fontWeight: 400, opacity: 0.7, minWidth: 18 }}>{i % 2 === 0 ? d.slice(8, 10) : ''}</th>)}</tr>
         </thead>
         <tbody>
           {h.stations.map((st) => (
@@ -113,7 +114,7 @@ function Heatmap({ h }: { h: Ins['heat'] }) {
               {h.dates.map((d) => {
                 const c = h.cells[st]?.[d];
                 return (
-                  <td key={d} title={`${st} · ${dm(d)}: ${c ? (c.s === 'missed' ? 'not started' : c.s === 'none' ? 'nothing yet' : `${c.p ?? 0}% filled${c.s === 'done' ? ' (complete)' : ''}`) : 'no run'}${c?.f ? ` · ${c.f} temperature failure${c.f === 1 ? '' : 's'}` : ''}`}
+                  <td key={d} title={`${st} · ${fmtDate(d)}: ${c ? (c.s === 'missed' ? 'not started' : c.s === 'none' ? 'nothing yet' : `${c.p ?? 0}% filled${c.s === 'done' ? ' (complete)' : ''}`) : 'no run'}${c?.f ? ` · ${c.f} temperature failure${c.f === 1 ? '' : 's'}` : ''}`}
                     style={{ width: 18, height: 18, background: cellColor(c), borderRadius: 3, textAlign: 'center', color: '#fff', fontSize: 10, fontWeight: 700 }}>
                     {c?.f ? '!' : ''}
                   </td>
@@ -153,15 +154,15 @@ export function L3Insights({ i, onPickOutlet }: { i: Ins; onPickOutlet?: (id: st
   return (
     <div style={{ marginBottom: 8 }}>
       <div className="desc" style={{ marginBottom: 8 }}>
-        {i.range.from === i.range.to ? i.range.from : `${i.range.from} to ${i.range.to}`} ({i.range.days} day{i.range.days === 1 ? '' : 's'}){hp ? `, compared with ${i.range.previousFrom === i.range.previousTo ? i.range.previousFrom : `${i.range.previousFrom} to ${i.range.previousTo}`}` : ''}.
+        {i.range.from === i.range.to ? fmtDate(i.range.from) : `${fmtDate(i.range.from)} to ${fmtDate(i.range.to)}`} ({i.range.days} day{i.range.days === 1 ? '' : 's'}){hp ? `, compared with ${i.range.previousFrom === i.range.previousTo ? fmtDate(i.range.previousFrom) : `${fmtDate(i.range.previousFrom)} to ${fmtDate(i.range.previousTo)}`}` : ''}.
         {i.range.capped && ' Shown: the latest 12 months.'} Numbers count the questions actually answered, so partly filled checks still show.
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        <Kpi hasPrev={hp} label="Data filled in" value={pctText(k.coveragePct)} cur={k.coveragePct} prev={p.coveragePct} goodWhenUp sub={`${k.answered} of ${k.expectedAnswers} questions answered`} />
+        <Kpi hasPrev={hp} label="Data filled in" value={pctText(k.coveragePct)} cur={k.coveragePct} prev={p.coveragePct} goodWhenUp sub={`${fmtNum(k.answered)} of ${fmtNum(k.expectedAnswers)} questions answered`} />
         <Kpi hasPrev={hp} label="Pass rate" value={pctText(k.passPct)} cur={k.passPct} prev={p.passPct} goodWhenUp sub="of the questions answered" />
-        <Kpi hasPrev={hp} label="Temperature failures" value={String(k.tempFails)} cur={k.tempFails} prev={p.tempFails} goodWhenUp={false} sub="readings outside range" />
-        <Kpi hasPrev={hp} label="Stations not started" value={String(k.notStarted)} cur={k.notStarted} prev={p.notStarted} goodWhenUp={false} sub={`${k.stationsPartial} partly filled · ${k.stationsDone} complete`} />
+        <Kpi hasPrev={hp} label="Temperature failures" value={fmtNum(k.tempFails)} cur={k.tempFails} prev={p.tempFails} goodWhenUp={false} sub="readings outside range" />
+        <Kpi hasPrev={hp} label="Stations not started" value={fmtNum(k.notStarted)} cur={k.notStarted} prev={p.notStarted} goodWhenUp={false} sub={`${fmtNum(k.stationsPartial)} partly filled · ${fmtNum(k.stationsDone)} complete`} />
         <Kpi hasPrev={hp} label="Finished on time" value={pctText(k.onTimePct)} cur={k.onTimePct} prev={p.onTimePct} goodWhenUp sub={`${k.shiftsLate} late shift${k.shiftsLate === 1 ? '' : 's'}`} />
       </div>
 
@@ -210,7 +211,7 @@ export function L3Insights({ i, onPickOutlet }: { i: Ins; onPickOutlet?: (id: st
           <Donut label="Shifts" centre={pctText(k.onTimePct)} parts={[{ v: k.shiftsOnTime, c: GOOD, name: 'on time' }, { v: k.shiftsLate, c: WARN, name: 'late' }]} />
           <Donut label="Failure follow-up" centre={cor.total ? `${Math.round((cor.withComment / cor.total) * 100)}%` : '—'} parts={[{ v: cor.withComment, c: GOOD, name: 'commented' }, { v: Math.max(0, cor.total - cor.withComment), c: 'var(--locked)', name: 'no comment' }]} />
         </div>
-        {cor.total > 0 && <div className="desc" style={{ marginTop: 8, textAlign: 'center' }}>{cor.total} temperature failure{cor.total === 1 ? '' : 's'}; {cor.withPhoto} with an after-correction photo.</div>}
+        {cor.total > 0 && <div className="desc" style={{ marginTop: 8, textAlign: 'center' }}>{fmtNum(cor.total)} temperature failure{cor.total === 1 ? '' : 's'}; {fmtNum(cor.withPhoto)} with an after-correction photo.</div>}
       </Card>
 
       <Card title="Station heatmap" sub="Every station, every day: how much was filled in">

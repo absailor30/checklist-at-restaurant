@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { fmtDayMonth } from '@/lib/format';
 
 interface Row {
   date: string; outletName: string; percent: number | null; band: string | null;
@@ -10,7 +11,7 @@ const BANDS = ['Exceptional', 'Good', 'Acceptable', 'Poor'] as const;
 
 const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const r1 = (n: number) => Math.round(n * 10) / 10;
-const shortDate = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+const shortDate = (d: string) => fmtDayMonth(d);
 
 export function L3Charts({ rows }: { rows: Row[] }) {
   const scored = rows.filter((r) => r.percent !== null) as (Row & { percent: number })[];

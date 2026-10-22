@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { loginEmail } from '@/lib/login-id';
+import { fmtDate } from '@/lib/format';
 import { CameraCapture } from '@/components/camera-capture';
 
 interface Q { id: string; prompt: string; notes: string | null; section: string | null; photoRequired?: boolean }
@@ -190,7 +191,7 @@ export default function AuditPage() {
               <>
                 <div style={{ fontSize: 20, fontWeight: 700 }}>{data.audit.score ?? '—'}% compliant</div>
                 <div className="desc">
-                  Completed{data.audit.completedAt ? ` ${new Date(data.audit.completedAt).toLocaleDateString('en-GB')}` : ''}
+                  Completed{data.audit.completedAt ? ` ${fmtDate(data.audit.completedAt)}` : ''}
                   {data.audit.auditorName ? ` by ${data.audit.auditorName}` : ''} · {fails.length} item{fails.length === 1 ? '' : 's'} not compliant
                 </div>
               </>

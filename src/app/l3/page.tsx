@@ -6,6 +6,7 @@ import { L3Charts } from '@/components/l3-charts';
 import { L3Insights } from '@/components/l3-insights';
 import { DailyTable } from '@/components/l3-daily';
 import { loginEmail } from '@/lib/login-id';
+import { fmtDate } from '@/lib/format';
 
 interface Row {
   date: string; outletId: string; outletName: string; shift: string; checkTime: string | null;
@@ -292,7 +293,7 @@ export default function L3ReportPage() {
               <tbody>
                 {(report?.rows ?? []).filter((r) => !onlyIssues || r.outOfRange > 0 || r.missed > 0 || r.onTime === false || (r.filledPct ?? 100) < 100).slice(0, 200).map((r, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '6px 8px' }}>{r.date}</td>
+                    <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{fmtDate(r.date)}</td>
                     <td style={{ padding: '6px 8px' }}>{r.outletName}</td>
                     <td style={{ padding: '6px 8px', textTransform: 'capitalize' }}>{r.shift}{r.checkTime ? ` · ${r.checkTime}` : ''}</td>
                     <td style={{ padding: '6px 8px' }}>{r.stationsComplete}/{r.stationCount}</td>

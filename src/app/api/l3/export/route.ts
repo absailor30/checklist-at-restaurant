@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { currentManager } from '@/lib/supabase/server';
 import { buildL3Report, parseRange } from '@/lib/l3-report';
+import { fmtDate } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
   const lines = [HEADERS.join(',')];
   for (const r of report.rows) {
     lines.push([
-      r.date, r.outletName, r.shift, r.stationsComplete, r.stationCount, r.filledPct ?? '',
+      fmtDate(r.date), r.outletName, r.shift, r.stationsComplete, r.stationCount, r.filledPct ?? '',
       r.percent ?? '', r.band ?? '', r.outOfRange, r.missed, r.onTime === null ? '' : r.onTime ? 'yes' : 'no', r.delayReason ?? '',
       r.l2Complete ? 'yes' : 'no', r.l3Complete ? 'yes' : 'no',
     ].map(csvCell).join(','));

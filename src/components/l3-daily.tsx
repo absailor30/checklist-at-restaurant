@@ -1,5 +1,7 @@
 'use client';
 
+import { fmtDate } from '@/lib/format';
+
 // One row per outlet per day, with Opening and Closing side by side in fixed columns,
 // so every day reads the same way. Built for a quick read by the CEO/Owner.
 
@@ -10,8 +12,7 @@ export interface DailyRow {
   l2Complete: boolean; l3Complete: boolean; delayReason?: string | null;
 }
 
-const niceDate = (d: string) =>
-  new Date(`${d}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC' });
+const niceDate = (d: string) => fmtDate(d);
 
 const hasProblem = (r: DailyRow) => r.recorded === false || r.outOfRange > 0 || r.missed > 0 || r.onTime === false || (r.filledPct ?? 100) < 100;
 

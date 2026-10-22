@@ -29,7 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             default one on every page load. */}
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
-      <body>{children}<ThemeMenu /></body>
+      <body><ThemeMenu />{children}</body>
     </html>
   );
 }
