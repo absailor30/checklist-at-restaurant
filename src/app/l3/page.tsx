@@ -74,6 +74,7 @@ export default function L3ReportPage() {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [onlyIssues, setOnlyIssues] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -122,6 +123,9 @@ export default function L3ReportPage() {
     void fetchReport(range, next);
   }
   function pickOutlet(id: string) { setFilter({ outletId: id }); }
+  const isAdmin = report?.viewerRole === 'Admin';
+  const isL2 = ['L2 Manager', 'Shift Manager', 'Admin'].includes(report?.viewerRole ?? '');
+  const isL3 = ['L3 Owner', 'General Manager', 'Owner', 'Admin'].includes(report?.viewerRole ?? '');
   const exportQuery = queryOf(range, filters);
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
@@ -158,9 +162,30 @@ export default function L3ReportPage() {
           <h1>Report</h1>
           <div className="sub">{report?.orgName}</div>
         </div>
-        <button className="btn-ghost" style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }} onClick={handleLogout}>
-          Sign out
-        </button>
+        <div style={{ display: 'flex', gap: 8, position: 'relative' }}>
+          <button className="btn-ghost" aria-expanded={menuOpen} style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }} onClick={() => setMenuOpen((o) => !o)}>
+            Menu ▾
+          </button>
+          {menuOpen && (
+            <div className="card" style={{ position: 'absolute', top: '100%', right: 0, marginTop: 6, padding: 6, minWidth: 220, zIndex: 40, boxShadow: '0 4px 16px rgba(0,0,0,.25)' }}>
+              {[
+                isL2 && { href: '/manager', label: 'Dashboard' },
+                isL3 && { href: '/manager', label: isAdmin ? 'Dashboard & Team' : 'Corrective actions' },
+                isL2 && { href: '/manager/fssai-audit', label: 'FSSAI Audit' },
+                isL3 && { href: '/manager/l3-checklist', label: 'CEO/Owner Checklist' },
+                { href: '/l3/add-custom-check', label: 'Custom Check' },
+                isL3 && { href: '/l3/add-questions', label: 'Add a question' },
+              ].filter(Boolean).map((item: any) => (
+                <a key={item.label} href={item.href} style={{ display: 'block', padding: '10px 12px', textDecoration: 'none', color: 'inherit', borderRadius: 8 }}>
+                  {item.label}
+                </a>
+              ))}
+            </div>
+          )}
+          <button className="btn-ghost" style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }} onClick={handleLogout}>
+            Sign out
+          </button>
+        </div>
       </div>
 
       <div className="shell">

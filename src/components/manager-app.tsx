@@ -99,6 +99,14 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
       setMyName(data.name || null);
       setMyEmail(data.email || null);
       setApproved(data.approved !== false);
+      try {
+        if (sessionStorage.getItem('goHome') && ['L3 Owner', 'General Manager', 'Owner'].includes(data.role)) {
+          sessionStorage.removeItem('goHome');
+          window.location.replace('/l3');
+          return;
+        }
+        sessionStorage.removeItem('goHome');
+      } catch {}
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -294,9 +302,11 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
     e.preventDefault();
     setLoginBusy(true);
     setLoginError('');
+    try { sessionStorage.setItem('goHome', '1'); } catch {}
     const { error } = await supabase.auth.signInWithPassword({ email: loginEmail(email), password });
     setLoginBusy(false);
     if (error) setLoginError(error.message);
+    if (error) try { sessionStorage.removeItem('goHome'); } catch {}
   };
 
   const submitSignup = async () => {
@@ -489,7 +499,7 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
           {menuOpen && (
             <div className="card" style={{ position: 'absolute', top: '100%', right: 0, marginTop: 6, padding: 6, minWidth: 220, zIndex: 40, boxShadow: '0 4px 16px rgba(0,0,0,.25)' }}>
               {[
-                view !== 'dashboard' && { href: '/manager', label: 'Dashboard' },
+                view !== 'dashboard' && { href: '/manager', label: role === 'Admin' ? 'Dashboard & Team' : canReviewL3 ? 'Corrective actions' : 'Dashboard' },
                 (canReviewL2 || canReviewL3) && { href: '/l3', label: 'Report' },
                 canReviewL2 && { href: '/manager/fssai-audit', label: 'FSSAI Audit' },
                 canReviewL3 && { href: '/manager/l3-checklist', label: 'CEO/Owner Checklist' },
