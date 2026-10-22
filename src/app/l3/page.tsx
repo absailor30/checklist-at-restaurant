@@ -4,13 +4,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { L3Charts } from '@/components/l3-charts';
 import { L3Insights } from '@/components/l3-insights';
+import { DailyTable } from '@/components/l3-daily';
 import { loginEmail } from '@/lib/login-id';
 
 interface Row {
   date: string; outletId: string; outletName: string; shift: string; checkTime: string | null;
   stationsComplete: number; stationCount: number; l1Complete: boolean; outOfRange: number; missed: number;
   percent: number | null; filledPct?: number | null; band: string | null; onTime: boolean | null;
-  l2Complete: boolean; l3Complete: boolean; delayReason?: string | null;
+  l2Complete: boolean; l3Complete: boolean; delayReason?: string | null; shiftKey?: string; recorded?: boolean;
 }
 interface Report {
   insights?: import('@/lib/l3-report').L3Insights;
@@ -269,7 +270,16 @@ export default function L3ReportPage() {
           </label>
         )}
 
+        {!loading && report && (
+          <>
+            <h3 style={{ margin: '8px 0 8px' }}>Day by day</h3>
+            <DailyTable rows={report.rows} shifts={report.filterOptions?.shifts ?? []} onlyIssues={onlyIssues} />
+          </>
+        )}
+
         {loading ? <div className="spinner" /> : (
+          <details>
+            <summary style={{ cursor: 'pointer', fontWeight: 600, margin: '8px 0' }}>Detailed table (every column)</summary>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
@@ -303,6 +313,7 @@ export default function L3ReportPage() {
               </tbody>
             </table>
           </div>
+          </details>
         )}
       </div>
     </>

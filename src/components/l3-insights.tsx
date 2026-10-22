@@ -41,7 +41,7 @@ function Kpi({ label, value, cur, prev, goodWhenUp, sub, hasPrev }: { label: str
 // Line (or column) chart over days, with grid lines and a label on each axis.
 function TrendChart({ points, max, unit, color, kind }: { points: { date: string; v: number | null }[]; max: number; unit: string; color: string; kind: 'line' | 'bars' }) {
   if (points.length === 0) return <div className="empty">No data in this range.</div>;
-  const W = 600, H = 180, L = 34, R = 8, T = 10, B = 24;
+  const W = 600, H = 180, L = 34, R = 20, T = 10, B = 24;
   const iw = W - L - R, ih = H - T - B;
   const x = (i: number) => L + (points.length === 1 ? iw / 2 : (i / (points.length - 1)) * iw);
   const y = (v: number) => T + ih - (v / max) * ih;

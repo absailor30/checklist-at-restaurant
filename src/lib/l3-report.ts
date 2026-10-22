@@ -18,6 +18,8 @@ export interface L3ReportRow {
   stationsComplete: number; stationCount: number; l1Complete: boolean; outOfRange: number; missed: number;
   percent: number | null; filledPct: number | null; band: string | null; onTime: boolean | null;
   l2Complete: boolean; l3Complete: boolean; delayReason: string | null;
+  shiftKey: string;   // 'morning' | 'evening' ...
+  recorded: boolean;  // false = nobody opened this shift at all (counted as not started)
 }
 
 export interface Kpis {
@@ -190,7 +192,39 @@ export async function buildL3Report(
   const deadlineOf = (shift: string) => (shift in bank.shiftDeadlines ? bank.shiftDeadlines[shift] : bank.hardStop);
   const allQuestions = bank.stations.flatMap((b) => b.questions);
 
-  const runs = await runsPage(db, outletIds, from, to, o.shift, o.station);
+  // A shift nobody opened leaves no record at all. For the report it still counts: every station
+  // of a past (or overdue) shift with no record is "not started". Days before an outlet's first
+  // ever run are left out, so a new client's report does not start with imaginary misses.
+  const firstRun = new Map<string, string>();
+  for (const x of selected) {
+    const { data: f } = await db.from('line_check_runs').select('run_date').eq('outlet_id', x.id).order('run_date').limit(1);
+    if (f?.[0]?.run_date) firstRun.set(x.id, f[0].run_date);
+  }
+  const withMissing = (rs: any[], f: string, t: string) => {
+    const have = new Set(rs.map((r) => `${r.outlet_id}|${r.run_date}|${r.shift}`));
+    const out = [...rs];
+    for (const ol of selected) {
+      const first = firstRun.get(ol.id);
+      if (!first) continue;
+      const tz = ol.timezone || 'UTC';
+      const nos = bank.own ? bank.stations.map((b) => b.no) : Array.from({ length: ol.station_count ?? 3 }, (_, i) => i + 1);
+      for (let d = f < first ? first : f; d <= t; d = addDays(d, 1)) {
+        for (const sh of bank.activeShifts) {
+          if (o.shift && sh !== o.shift) continue;
+          if (have.has(`${ol.id}|${d}|${sh}`)) continue;
+          const due = d < todayLocal || (d === todayLocal && finishedAfterDeadline(new Date(), d, deadlineOf(sh), tz));
+          if (!due) continue;
+          out.push({
+            id: `none-${ol.id}-${d}-${sh}`, outlet_id: ol.id, run_date: d, shift: sh, check_time: null,
+            l2_completed_at: null, l3_completed_at: null, delay_reason: null, noRecord: true,
+            line_check_stations: (o.station ? nos.filter((n) => n === o.station) : nos).map((n) => ({ id: `none-${ol.id}-${d}-${sh}-${n}`, station_no: n, status: 'missed', completed_at: null, line_check_answers: [] })),
+          });
+        }
+      }
+    }
+    return out;
+  };
+  const runs = withMissing(await runsPage(db, outletIds, from, to, o.shift, o.station), from, to);
 
   // What one station contributed: questions answered of those expected, and how well the answered ones went.
   const statsOf = (s: any) => {
@@ -239,8 +273,11 @@ export async function buildL3Report(
       percent, filledPct: pct(answered, fullExpected), band: percent !== null ? bandOf(percent) : null,
       onTime: completed.length > 0 && deadline ? !late : null,
       l2Complete: !!r.l2_completed_at, l3Complete: !!r.l3_completed_at, delayReason: r.delay_reason ?? null,
+      shiftKey: r.shift, recorded: !r.noRecord,
     };
-  }).sort((a, b) => a.date === b.date ? a.outletName.localeCompare(b.outletName) : a.date < b.date ? 1 : -1);
+  }).sort((a, b) => a.date !== b.date ? (a.date < b.date ? 1 : -1)
+    : a.outletName !== b.outletName ? a.outletName.localeCompare(b.outletName)
+    : bank.activeShifts.indexOf(a.shiftKey) - bank.activeShifts.indexOf(b.shiftKey)); // Opening before Closing, always
 
   // ---- KPIs: this period and the one before ----
   const kpiOf = (rs: any[]): Kpis => {
@@ -269,7 +306,7 @@ export async function buildL3Report(
   try {
     const kpis = kpiOf(runs);
     const hasPrevious = days <= PREVIOUS_MAX_SPAN;
-    const previous = hasPrevious ? kpiOf(await runsPage(db, outletIds, previousFrom, previousTo, o.shift, o.station)) : emptyKpis();
+    const previous = hasPrevious ? kpiOf(withMissing(await runsPage(db, outletIds, previousFrom, previousTo, o.shift, o.station), previousFrom, previousTo)) : emptyKpis();
 
     type Acc = { done: number; partial: number; notStarted: number; answered: number; expected: number; fails: number; pts: number; scored: number };
     const acc = (): Acc => ({ done: 0, partial: 0, notStarted: 0, answered: 0, expected: 0, fails: 0, pts: 0, scored: 0 });
