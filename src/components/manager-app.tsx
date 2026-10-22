@@ -1,0 +1,998 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import { CameraCapture } from '@/components/camera-capture';
+import { roleLabel } from '@/lib/labels';
+import { formatCheckTime } from '@/lib/line-check/time';
+import { loginEmail } from '@/lib/login-id';
+
+const SHIFTS = [
+  { id: 'morning', label: 'Morning shift' },
+  { id: 'afternoon', label: 'Afternoon shift' },
+  { id: 'evening', label: 'Evening shift' },
+] as const;
+
+export type ManagerView = 'dashboard' | 'questions' | 'schedules';
+
+// One component serves the dashboard and its two side pages, so sign-in and data loading are shared.
+export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const router = useRouter();
+  const supabase = createClient();
+  const [sessionState, setSessionState] = useState<'checking' | 'in' | 'out'>('checking');
+
+  // Login state
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [showSignup, setShowSignup] = useState(false);
+  const [sigBrand, setSigBrand] = useState('');
+  const [sigName, setSigName] = useState('');
+  const [sigEmail, setSigEmail] = useState('');
+  const [sigPassword, setSigPassword] = useState('');
+  const [sigBusy, setSigBusy] = useState(false);
+  const [sigMessage, setSigMessage] = useState('');
+
+  const [outlets, setOutlets] = useState<any[]>([]);
+  const [role, setRole] = useState<string | null>(null);
+  const [stationNames, setStationNames] = useState<string[]>([]);
+  const [shiftLabels, setShiftLabels] = useState<Record<string, string>>({});
+  const [activeShifts, setActiveShifts] = useState<string[]>(['morning', 'afternoon', 'evening']);
+  const [hardStop, setHardStop] = useState<string | null>('12:00');
+  const [shiftDeadlines, setShiftDeadlines] = useState<Record<string, string | null>>({});
+  const [myName, setMyName] = useState<string | null>(null);
+  const [myEmail, setMyEmail] = useState<string | null>(null);
+  const [approved, setApproved] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  // Review modal state
+  const [reviewLevel, setReviewLevel] = useState<'L2' | 'L3' | null>(null);
+  const [reviewRunId, setReviewRunId] = useState<string | null>(null);
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [answers, setAnswers] = useState<Record<string, { yesNo?: string; reason?: string; flagged?: boolean }>>({});
+  const [photos, setPhotos] = useState<Record<string, File>>({});
+  const [showComment, setShowComment] = useState<Set<string>>(new Set());
+  const [showMedia, setShowMedia] = useState<Set<string>>(new Set());
+  const [cameraForQ, setCameraForQ] = useState<string | null>(null);
+  const [qIndex, setQIndex] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [actions, setActions] = useState<any[]>([]);
+  const [newQLevel, setNewQLevel] = useState<'L2' | 'L3'>('L2');
+  const [newQPrompt, setNewQPrompt] = useState('');
+  const [newQBusy, setNewQBusy] = useState(false);
+  const [newQMessage, setNewQMessage] = useState('');
+  const [team, setTeam] = useState<any[]>([]);
+  const [teamOutlets, setTeamOutlets] = useState<any[]>([]);
+  const [newL1Name, setNewL1Name] = useState('');
+  const [newL1Shift, setNewL1Shift] = useState<'morning' | 'afternoon' | 'evening'>('morning');
+  const [newL1Outlet, setNewL1Outlet] = useState('');
+  const [teamBusy, setTeamBusy] = useState(false);
+  const [teamMessage, setTeamMessage] = useState('');
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [scheduleOutlets, setScheduleOutlets] = useState<any[]>([]);
+  const [newSchedTitle, setNewSchedTitle] = useState('');
+  const [newSchedFreq, setNewSchedFreq] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
+  const [newSchedOutlet, setNewSchedOutlet] = useState('');
+  const [newSchedDay, setNewSchedDay] = useState(1);
+  const [schedBusy, setSchedBusy] = useState(false);
+  const [schedMessage, setSchedMessage] = useState('');
+
+  const canReviewL2 = role === 'L2 Manager' || role === 'Shift Manager' || role === 'Admin';
+  const canReviewL3 = role === 'L3 Owner' || role === 'General Manager' || role === 'Owner' || role === 'Admin';
+
+  const fetchOverview = async () => {
+    try {
+      const res = await fetch('/api/manager/line-check/overview');
+      if (!res.ok) throw new Error('Failed to fetch overview');
+      const data = await res.json();
+      setOutlets(data.outlets || []);
+      setRole(data.role || null);
+      setStationNames(data.stationNames || []);
+      setShiftLabels(data.shiftLabels || {});
+      setActiveShifts(data.activeShifts || ['morning', 'afternoon', 'evening']);
+      setHardStop(data.hardStop === undefined ? '12:00' : data.hardStop);
+      setShiftDeadlines(data.shiftDeadlines || {});
+      setMyName(data.name || null);
+      setMyEmail(data.email || null);
+      setApproved(data.approved !== false);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchActions = async () => {
+    try {
+      const res = await fetch('/api/manager/corrective-actions');
+      const data = await res.json();
+      if (res.ok) setActions(data.actions || []);
+    } catch { /* non-critical */ }
+  };
+
+  const fetchTeam = async () => {
+    try {
+      const res = await fetch('/api/manager/team');
+      const data = await res.json();
+      if (res.ok) {
+        setTeam(data.users || []);
+        setTeamOutlets(data.outlets || []);
+        if (!newL1Outlet && data.outlets?.[0]) setNewL1Outlet(data.outlets[0].id);
+      }
+    } catch { /* non-critical */ }
+  };
+
+  const addL1 = async () => {
+    if (newL1Name.trim().length < 2 || !newL1Outlet) return;
+    setTeamBusy(true);
+    setTeamMessage('');
+    try {
+      const res = await fetch('/api/manager/team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add_l1', name: newL1Name.trim(), shift: newL1Shift, outletId: newL1Outlet }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setTeamMessage(data.error); return; }
+      setNewL1Name('');
+      void fetchTeam();
+    } catch {
+      setTeamMessage('The request did not complete.');
+    } finally {
+      setTeamBusy(false);
+    }
+  };
+
+  const approveUser = async (userId: string) => {
+    await fetch('/api/manager/team', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'approve', userId }),
+    });
+    void fetchTeam();
+  };
+
+  const rejectUser = async (userId: string) => {
+    await fetch('/api/manager/team', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reject', userId }),
+    });
+    void fetchTeam();
+  };
+
+  const deactivateUser = async (userId: string) => {
+    await fetch('/api/manager/team', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'deactivate', userId }),
+    });
+    void fetchTeam();
+  };
+
+  const fetchSchedules = async () => {
+    try {
+      const res = await fetch('/api/manager/schedules');
+      const data = await res.json();
+      if (res.ok) {
+        setSchedules(data.schedules || []);
+        setScheduleOutlets(data.outlets || []);
+      }
+    } catch { /* non-critical */ }
+  };
+
+  const addSchedule = async () => {
+    if (newSchedTitle.trim().length < 3) return;
+    setSchedBusy(true);
+    setSchedMessage('');
+    try {
+      const res = await fetch('/api/manager/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newSchedTitle.trim(), frequency: newSchedFreq, outletId: newSchedOutlet || null,
+          dayOfWeek: newSchedFreq === 'weekly' ? newSchedDay : undefined,
+          dayOfMonth: newSchedFreq === 'monthly' ? newSchedDay : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setSchedMessage(data.error); return; }
+      setNewSchedTitle('');
+      void fetchSchedules();
+    } catch {
+      setSchedMessage('The request did not complete.');
+    } finally {
+      setSchedBusy(false);
+    }
+  };
+
+  const completeSchedule = async (row: any) => {
+    await fetch('/api/manager/schedules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'complete', scheduleId: row.scheduleId, outletId: row.outletId, periodKey: row.periodKey }),
+    });
+    void fetchSchedules();
+  };
+
+  const addQuestion = async () => {
+    if (newQPrompt.trim().length < 3) return;
+    setNewQBusy(true);
+    setNewQMessage('');
+    try {
+      const res = await fetch('/api/manager/line-check/questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: newQLevel, prompt: newQPrompt.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setNewQMessage(data.error); return; }
+      setNewQMessage('Added — it will appear on the next review.');
+      setNewQPrompt('');
+    } catch {
+      setNewQMessage('The request did not complete.');
+    } finally {
+      setNewQBusy(false);
+    }
+  };
+
+  const resolveAction = async (id: string) => {
+    await fetch('/api/manager/corrective-actions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    void fetchActions();
+  };
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        setSessionState('out');
+      } else {
+        setSessionState('in');
+        fetchOverview();
+        fetchActions();
+        fetchTeam();
+        fetchSchedules();
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setSessionState('in');
+        fetchOverview();
+        fetchActions();
+        fetchTeam();
+        fetchSchedules();
+      } else {
+        setSessionState('out');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  useEffect(() => {
+    if (sessionState !== 'in') return;
+    const interval = setInterval(() => {
+      fetchOverview();
+      fetchActions();
+      fetchTeam();
+      fetchSchedules();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [sessionState]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginBusy(true);
+    setLoginError('');
+    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail(email), password });
+    setLoginBusy(false);
+    if (error) setLoginError(error.message);
+  };
+
+  const submitSignup = async () => {
+    setSigBusy(true);
+    setSigMessage('');
+    try {
+      const res = await fetch('/api/manager/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandName: sigBrand, name: sigName, email: sigEmail, password: sigPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setSigMessage(data.error); return; }
+      setSigMessage('Request sent — the CEO/Owner needs to approve it before you can sign in.');
+      setSigBrand(''); setSigName(''); setSigEmail(''); setSigPassword('');
+    } catch {
+      setSigMessage('The request did not complete.');
+    } finally {
+      setSigBusy(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const startReview = async (runId: string, level: 'L2' | 'L3') => {
+    setReviewLevel(level);
+    setReviewRunId(runId);
+    setAnswers({});
+    setPhotos({});
+    setShowComment(new Set());
+    setShowMedia(new Set());
+    setQIndex(0);
+    try {
+      const res = await fetch(`/api/manager/line-check/questions?level=${level}`);
+      if (!res.ok) throw new Error('Failed to fetch questions');
+      const data = await res.json();
+      setQuestions(data.questions || []);
+    } catch (err: any) {
+      alert(err.message);
+      setReviewLevel(null);
+    }
+  };
+
+  const submitReview = async () => {
+    if (!reviewLevel || !reviewRunId) return;
+
+    if (Object.keys(answers).length < questions.length) {
+      alert('Please answer all questions');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const formattedAnswers = Object.entries(answers).map(([qId, val]) => ({
+        question_id: qId,
+        yes_no: val.yesNo,
+        reason: val.reason,
+        flagged: Boolean(val.flagged),
+      }));
+
+      const form = new FormData();
+      form.append('run_id', reviewRunId);
+      form.append('level', reviewLevel);
+      form.append('answers', JSON.stringify(formattedAnswers));
+      for (const [qId, file] of Object.entries(photos)) {
+        form.append(`photo_${qId}`, file);
+      }
+
+      const res = await fetch('/api/manager/line-check/submit', {
+        method: 'POST',
+        body: form,
+      });
+
+      if (!res.ok) throw new Error('Failed to submit review');
+
+      setReviewLevel(null);
+      setReviewRunId(null);
+      fetchOverview();
+      fetchActions();
+      fetchTeam();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (sessionState === 'checking') return <div className="shell" style={{ paddingTop: 32 }}><div className="spinner" /></div>;
+
+  if (sessionState === 'out') {
+    return (
+      <div className="shell" style={{ paddingTop: 32 }}>
+        <h2>Manager sign in</h2>
+        <p className="lede">
+          Managers sign in with an email and password, not a PIN — approvals and
+          unlocks are recorded against your name permanently.
+        </p>
+        {loginError && <div className="banner error">{loginError}</div>}
+        <form className="card" onSubmit={handleLogin}>
+          <div>
+            <label htmlFor="email" style={{ marginTop: 0 }}>Email or username</label>
+            <input
+              id="email"
+              type="text" autoCapitalize="none" autoCorrect="off"
+              value={email}
+              autoComplete="username"
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              autoComplete="current-password"
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loginBusy}
+            className="btn-primary"
+            style={{ marginTop: 16 }}
+          >
+            {loginBusy ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+
+        <button className="btn btn-ghost" style={{ marginTop: 16 }} onClick={() => { setShowSignup((v) => !v); setSigMessage(''); }}>
+          New Operations Manager? Request access
+        </button>
+        {showSignup && (
+          <div className="card" style={{ marginTop: 8 }}>
+            {sigMessage && <div className="banner info" style={{ marginBottom: 8 }}>{sigMessage}</div>}
+            <label htmlFor="sigBrand" style={{ marginTop: 0 }}>Brand name</label>
+            <input id="sigBrand" value={sigBrand} onChange={(e) => setSigBrand(e.target.value)} placeholder="Exact brand name" />
+            <label htmlFor="sigName">Your name</label>
+            <input id="sigName" value={sigName} onChange={(e) => setSigName(e.target.value)} />
+            <label htmlFor="sigEmail">Email</label>
+            <input id="sigEmail" type="email" value={sigEmail} onChange={(e) => setSigEmail(e.target.value)} />
+            <label htmlFor="sigPassword">Password</label>
+            <input id="sigPassword" type="password" value={sigPassword} onChange={(e) => setSigPassword(e.target.value)} placeholder="6+ characters" />
+            <button
+              className="btn-primary" style={{ marginTop: 12 }}
+              disabled={sigBusy || !sigBrand.trim() || sigName.trim().length < 2 || !sigEmail || sigPassword.length < 6}
+              onClick={submitSignup}
+            >
+              {sigBusy ? 'Sending…' : 'Send request'}
+            </button>
+          </div>
+        )}
+
+        <a className="btn btn-ghost" href="/l1" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 16, lineHeight: '22px' }}>
+          I'm Manager Line Check staff
+        </a>
+      </div>
+    );
+  }
+
+  if (loading) return <div className="shell" style={{ paddingTop: 32 }}><div className="spinner" /></div>;
+  if (error) return <div className="shell" style={{ paddingTop: 32 }}><div className="banner error">Error: {error}</div></div>;
+  if (!approved) {
+    return (
+      <div className="shell" style={{ paddingTop: 32 }}>
+        <h2>Waiting for approval</h2>
+        <p className="lede">Your account has been created but the CEO/Owner still needs to approve it before you can use the dashboard.</p>
+        <button className="btn-ghost" style={{ marginTop: 16 }} onClick={handleLogout}>Sign out</button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="topbar">
+        <div>
+          <h1>{view === 'questions' ? 'Add a question' : view === 'schedules' ? 'Recurring schedules' : 'Manager Dashboard'}</h1>
+          <div className="sub">
+            {myName || myEmail || 'Signed in'}{role ? ` · ${roleLabel(role)}` : ''}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, position: 'relative' }}>
+          <button className="btn-ghost" aria-expanded={menuOpen} style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }} onClick={() => setMenuOpen((o) => !o)}>
+            Menu ▾
+          </button>
+          {menuOpen && (
+            <div className="card" style={{ position: 'absolute', top: '100%', right: 0, marginTop: 6, padding: 6, minWidth: 220, zIndex: 40, boxShadow: '0 4px 16px rgba(0,0,0,.25)' }}>
+              {[
+                view !== 'dashboard' && { href: '/manager', label: 'Dashboard' },
+                (canReviewL2 || canReviewL3) && { href: '/l3', label: 'Report' },
+                canReviewL2 && { href: '/manager/fssai-audit', label: 'FSSAI Audit' },
+                canReviewL3 && { href: '/manager/l3-checklist', label: 'CEO/Owner Checklist' },
+                { href: '/manager/schedules', label: 'Recurring schedules' },
+                canReviewL3 && { href: '/manager/questions', label: 'Add a question' },
+              ].filter(Boolean).map((item: any) => (
+                <a key={item.href} href={item.href} style={{ display: 'block', padding: '10px 12px', textDecoration: 'none', color: 'inherit', borderRadius: 8, fontWeight: view !== 'dashboard' && item.href === `/manager/${view}` ? 700 : 400 }}>
+                  {item.label}
+                </a>
+              ))}
+            </div>
+          )}
+          <button className="btn-ghost" style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }} onClick={handleLogout}>
+            Sign out
+          </button>
+        </div>
+      </div>
+
+      <div className="shell">
+        {view === 'dashboard' && schedules.filter((x) => x.due && !x.completed).length > 0 && (
+          <a href="/manager/schedules" className="banner info" style={{ display: 'block', textDecoration: 'none', color: 'inherit', marginBottom: 12 }}>
+            {schedules.filter((x) => x.due && !x.completed).length} recurring task{schedules.filter((x) => x.due && !x.completed).length === 1 ? '' : 's'} due now — open
+          </a>
+        )}
+        {view === 'questions' && canReviewL3 && (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <strong>Add a question</strong>
+            <p className="lede" style={{ fontSize: 13, margin: '8px 0 12px' }}>
+              Adds a question just for your brand's Operations Manager or CEO/Owner review. The standard questions stay as they are for every brand.
+            </p>
+            {newQMessage && <div className="banner info" style={{ marginBottom: 8 }}>{newQMessage}</div>}
+            <div className="btn-row">
+              <button className={newQLevel === 'L2' ? 'btn-primary' : 'btn-ghost'} onClick={() => setNewQLevel('L2')}>Operations Manager</button>
+              <button className={newQLevel === 'L3' ? 'btn-primary' : 'btn-ghost'} onClick={() => setNewQLevel('L3')}>CEO/Owner</button>
+            </div>
+            <textarea
+              style={{ marginTop: 8 }}
+              value={newQPrompt}
+              onChange={(e) => setNewQPrompt(e.target.value)}
+              placeholder="e.g. Was the walk-in freezer log signed today?"
+            />
+            <button className="btn-primary" style={{ marginTop: 8 }} disabled={newQBusy || newQPrompt.trim().length < 3} onClick={addQuestion}>
+              {newQBusy ? 'Adding…' : 'Add question'}
+            </button>
+          </div>
+        )}
+
+        {view === 'dashboard' && canReviewL3 && (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <strong>Team</strong>
+            {teamMessage && <div className="banner info" style={{ margin: '8px 0' }}>{teamMessage}</div>}
+
+            <p className="lede" style={{ fontSize: 13, margin: '8px 0 4px' }}>Add Manager Line Check staff</p>
+            <input placeholder="Name" value={newL1Name} onChange={(e) => setNewL1Name(e.target.value)} />
+            <div className="btn-row" style={{ marginTop: 6 }}>
+              {(['morning', 'afternoon', 'evening'] as const).filter((s) => activeShifts.includes(s)).map((s) => (
+                <button key={s} className={newL1Shift === s ? 'btn-primary' : 'btn-ghost'} onClick={() => setNewL1Shift(s)}>
+                  {shiftLabels[s] ?? s}
+                </button>
+              ))}
+            </div>
+            <select value={newL1Outlet} onChange={(e) => setNewL1Outlet(e.target.value)} style={{ marginTop: 6 }}>
+              {teamOutlets.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+            <button className="btn-primary" style={{ marginTop: 8 }} disabled={teamBusy || newL1Name.trim().length < 2} onClick={addL1}>
+              {teamBusy ? 'Adding…' : 'Add Manager Line Check staff'}
+            </button>
+
+            {team.filter((u: any) => u.isActive && !u.approved).length > 0 && (
+              <>
+                <p className="lede" style={{ fontSize: 13, margin: '16px 0 4px' }}>Pending approval</p>
+                {team.filter((u: any) => u.isActive && !u.approved).map((u: any) => (
+                  <div key={u.id} className="lockbox" style={{ marginTop: 6 }}>
+                    <div className="row">
+                      <span className="label">{u.name}</span>
+                      <span className="tag warn">{u.role}{u.shift ? ` · ${u.shift}` : ''}</span>
+                    </div>
+                    <div className="desc">{u.outlets.join(', ') || 'No outlet'}</div>
+                    <div className="btn-row" style={{ marginTop: 6 }}>
+                      <button className="btn-primary" style={{ width: 'auto' }} onClick={() => approveUser(u.id)}>Approve</button>
+                      <button className="btn-ghost" style={{ width: 'auto' }} onClick={() => rejectUser(u.id)}>Reject</button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            <p className="lede" style={{ fontSize: 13, margin: '16px 0 4px' }}>Everyone on the team</p>
+            {team.filter((u: any) => u.isActive && u.approved).map((u: any) => (
+              <div key={u.id} className="lockbox" style={{ marginTop: 6 }}>
+                <div className="row">
+                  <span className="label">{u.name}</span>
+                  <span className="tag plain">{u.role}{u.shift ? ` · ${u.shift}` : ''}</span>
+                </div>
+                <div className="desc">{u.outlets.join(', ') || 'No outlet'}</div>
+                <button className="btn-ghost" style={{ marginTop: 6, width: 'auto' }} onClick={() => deactivateUser(u.id)}>
+                  Deactivate
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {view === 'schedules' && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <strong>Recurring schedules</strong>
+          <p className="lede" style={{ fontSize: 13, margin: '8px 0 12px' }}>
+            Separate from the daily line check — for weekly audits, monthly deep-cleans, and anything else on its own cadence. The CEO/Owner sets up a task once; on the day it is due it shows under "Due now" for the managers, who tap "Mark done" when it is finished.
+          </p>
+
+          {canReviewL3 && (
+            <>
+              {schedMessage && <div className="banner info" style={{ marginBottom: 8 }}>{schedMessage}</div>}
+              <input placeholder="Title, e.g. Weekly grease trap audit" value={newSchedTitle} onChange={(e) => setNewSchedTitle(e.target.value)} />
+              <div className="btn-row" style={{ marginTop: 6 }}>
+                {(['daily', 'weekly', 'monthly'] as const).map((f) => (
+                  <button key={f} className={newSchedFreq === f ? 'btn-primary' : 'btn-ghost'} onClick={() => setNewSchedFreq(f)}>{f}</button>
+                ))}
+              </div>
+              {newSchedFreq === 'weekly' && (
+                <select value={newSchedDay} onChange={(e) => setNewSchedDay(Number(e.target.value))} style={{ marginTop: 6 }}>
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => <option key={i} value={i}>{d}</option>)}
+                </select>
+              )}
+              {newSchedFreq === 'monthly' && (
+                <input type="number" min={1} max={31} value={newSchedDay} onChange={(e) => setNewSchedDay(Number(e.target.value))} style={{ marginTop: 6 }} placeholder="Day of month" />
+              )}
+              <select value={newSchedOutlet} onChange={(e) => setNewSchedOutlet(e.target.value)} style={{ marginTop: 6 }}>
+                <option value="">All outlets</option>
+                {scheduleOutlets.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+              <button className="btn-primary" style={{ marginTop: 8 }} disabled={schedBusy || newSchedTitle.trim().length < 3} onClick={addSchedule}>
+                {schedBusy ? 'Adding…' : 'Add schedule'}
+              </button>
+            </>
+          )}
+
+          <p className="lede" style={{ fontSize: 13, margin: '16px 0 4px' }}>Due now</p>
+          {schedules.filter((s) => s.due && !s.completed).length === 0 && (
+            <div className="desc">Nothing due right now.</div>
+          )}
+          {schedules.filter((s) => s.due && !s.completed).map((s, i) => (
+            <div key={i} className="lockbox" style={{ marginTop: 6 }}>
+              <div className="row">
+                <span className="label">{s.title}</span>
+                <span className="tag warn">{s.frequency}</span>
+              </div>
+              <div className="desc">{s.outletName}</div>
+              <button className="btn-ghost" style={{ marginTop: 6, width: 'auto' }} onClick={() => completeSchedule(s)}>
+                Mark done
+              </button>
+            </div>
+          ))}
+        </div>
+
+        )}
+
+        {view === 'questions' && !canReviewL3 && <p className="empty">Only the CEO/Owner can add questions.</p>}
+
+        {view === 'dashboard' && actions.length > 0 && (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <strong>Corrective actions ({actions.length} open)</strong>
+            {actions.map((a) => (
+              <div key={a.id} className="lockbox" style={{ marginTop: 8 }}>
+                <div className="row">
+                  <span className="label">{a.outlets?.name ?? ''} · {a.source.toUpperCase()}</span>
+                  <span className="tag warn">{roleLabel(a.assigned_role)}</span>
+                </div>
+                <div className="desc" style={{ marginTop: 4 }}>{a.description}</div>
+                <button
+                  className="btn-ghost"
+                  style={{ marginTop: 8, width: 'auto' }}
+                  onClick={() => resolveAction(a.id)}
+                >
+                  Mark resolved
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {view === 'dashboard' && outlets.length === 0 && <p className="empty">No outlets found.</p>}
+
+        {view === 'dashboard' && outlets.map(outlet => {
+          const runs = outlet.line_check_runs || [];
+
+          return (
+            <article key={outlet.id} className="item">
+              <div className="head">
+                <div className="title">{outlet.name}</div>
+              </div>
+
+              {SHIFTS.filter(({ id }) => activeShifts.includes(id)).map(({ id: shift, label }) => {
+                const run = runs.find((r: any) => r.shift === shift) || null;
+
+                const stationCount = outlet.station_count ?? 3;
+                let stationsComplete = 0;
+                let l1Complete = false;
+                if (run && run.line_check_stations) {
+                  const completes = run.line_check_stations.filter((s: any) => s.status === 'complete');
+                  stationsComplete = completes.length;
+                  l1Complete = stationsComplete === stationCount;
+                }
+
+                const l2Complete = !!(run && run.l2_completed_at);
+                const l3Complete = !!(run && run.l3_completed_at);
+
+                return (
+                <div key={shift} style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                  <div className="desc" style={{ fontWeight: 600 }}>{shiftLabels[shift] ?? label}{run?.check_time ? ` · ${formatCheckTime(run.check_time)}` : ''}</div>
+                  {!run ? (
+                    <div className="desc">Not started yet.</div>
+                  ) : (
+                  <>
+                  <div style={{ marginTop: 12 }}>
+                    <div className="desc" style={{ marginBottom: 6 }}>Manager Line Check stations</div>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {Array.from({ length: stationCount }, (_, i) => i + 1).map(stNo => {
+                        const st = run.line_check_stations?.find((s: any) => s.station_no === stNo);
+                        let statusText = 'Not Started';
+                        let tagClass = 'plain';
+                        let timingText = null;
+                        let timingClass = '';
+
+                        if (st) {
+                          statusText = st.status.replace('_', ' ');
+                          if (st.status === 'complete') {
+                            tagClass = 'ok';
+                            if (st.completed_at) {
+                              const formatter = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: outlet.timezone || 'UTC',
+                                year: 'numeric', month: '2-digit', day: '2-digit',
+                                hour: '2-digit', minute: '2-digit',
+                                hour12: false
+                              });
+                              const parts = formatter.formatToParts(new Date(st.completed_at));
+                              const dp = Object.fromEntries(parts.map(p => [p.type, p.value]));
+                              const completedLocal = `${dp.year}-${dp.month}-${dp.day} ${dp.hour}:${dp.minute}`;
+                              // This shift's own deadline when the brand has one, else the brand-wide hard stop.
+                              const deadline = shiftDeadlines[shift] !== undefined ? shiftDeadlines[shift] : hardStop;
+                              const cutoffLocal = `${run.run_date} ${deadline ?? '12:00'}`;
+
+                              if (!deadline) {
+                                timingText = null;
+                              } else if (completedLocal >= cutoffLocal) {
+                                timingText = 'Late';
+                                timingClass = 'warn';
+                              } else {
+                                timingText = 'On Time';
+                                timingClass = 'ok';
+                              }
+                            }
+                          } else if (st.status === 'in_progress') {
+                            tagClass = 'warn';
+                          } else if (st.status === 'paused') {
+                            tagClass = 'locked';
+                          } else if (st.status === 'missed') {
+                            tagClass = 'locked';
+                          }
+                        }
+
+                        return (
+                          <div key={stNo} className="card" style={{ flex: '1 1 96px', padding: '10px', marginBottom: 0, textAlign: 'center', boxShadow: 'none' }}>
+                            <div style={{ fontWeight: 600, fontSize: 14 }}>{stationNames[stNo - 1] || `S${stNo}`}</div>
+                            <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                              <span className={`tag ${tagClass}`} style={{ textTransform: 'capitalize' }}>
+                                {statusText}
+                              </span>
+                              {timingText && (
+                                <span className={`tag ${timingClass}`}>{timingText}</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {run.delay_reason && <div className="banner" style={{ marginTop: 8 }}>⏱ Delay reason (Manager Line Check): {run.delay_reason}</div>}
+                  {run.exceptions?.length > 0 && <ExceptionsPanel exceptions={run.exceptions} stationNames={stationNames} />}
+
+                  <div className="lockbox">
+                    <div className="row">
+                      <div className="label" style={{ margin: 0, display: 'flex', alignItems: 'center' }}>Operations Manager Review</div>
+                      <div>
+                        {l2Complete ? (
+                          <span className="tag ok">Completed</span>
+                        ) : !l1Complete ? (
+                          <span className="tag plain">Waiting for Manager Line Check</span>
+                        ) : canReviewL2 ? (
+                          <button
+                            onClick={() => startReview(run.id, 'L2')}
+                            className="btn-primary"
+                            style={{ padding: '6px 12px', minHeight: 'auto', borderRadius: '8px', fontSize: 13, width: 'auto' }}
+                          >
+                            Review
+                          </button>
+                        ) : (
+                          <span className="tag plain">Operations Manager only</span>
+                        )}
+                      </div>
+                    </div>
+                    {canReviewL3 && (
+                    <div className="row" style={{ marginTop: 8 }}>
+                      <div className="label" style={{ margin: 0, display: 'flex', alignItems: 'center' }}>CEO/Owner Review</div>
+                      <div>
+                        {l3Complete ? (
+                          <span className="tag ok">Completed</span>
+                        ) : !l2Complete ? (
+                          <span className="tag plain">Waiting for Operations Manager</span>
+                        ) : canReviewL3 ? (
+                          <button
+                            onClick={() => startReview(run.id, 'L3')}
+                            className="btn-primary"
+                            style={{ padding: '6px 12px', minHeight: 'auto', borderRadius: '8px', fontSize: 13, width: 'auto' }}
+                          >
+                            Review
+                          </button>
+                        ) : (
+                          <span className="tag plain">CEO/Owner only</span>
+                        )}
+                      </div>
+                    </div>
+                    )}
+                  </div>
+                  </>
+                  )}
+                </div>
+                );
+              })}
+            </article>
+          );
+        })}
+      </div>
+
+      {reviewLevel && (
+        <div className="sheet-backdrop">
+          <div className="sheet">
+            <h3>{reviewLevel === 'L2' ? 'Operations Manager' : 'CEO/Owner'} Review</h3>
+            {(() => {
+              const reviewRun = outlets.flatMap((o: any) => o.line_check_runs ?? []).find((r: any) => r.id === reviewRunId);
+              return reviewRun?.exceptions?.length > 0
+                ? <ExceptionsPanel exceptions={reviewRun.exceptions} stationNames={stationNames} />
+                : null;
+            })()}
+            {questions.length === 0 ? (
+              <div className="spinner" />
+            ) : (
+              <div style={{ marginTop: 16 }}>
+                {(() => {
+                  const q = questions[qIndex];
+                  const isLast = qIndex === questions.length - 1;
+                  const a = answers[q.id] || {};
+                  const setA = (partial: typeof a) =>
+                    setAnswers(prev => ({ ...prev, [q.id]: { ...prev[q.id], ...partial } }));
+                  const commentOpen = showComment.has(q.id) || Boolean(a.reason);
+                  const mediaOpen = showMedia.has(q.id) || Boolean(photos[q.id]);
+
+                  return (
+                    <div key={q.id} className="card">
+                      <div className="tag plain">Q{qIndex + 1} of {questions.length}</div>
+                      {q.section && <div className="desc" style={{ marginTop: 8, fontWeight: 600 }}>{q.section}</div>}
+                      <h2 style={{ marginTop: 10, fontSize: 16 }}>{q.prompt}</h2>
+                      {q.notes && <p className="desc" style={{ marginTop: 6 }}>{q.notes}</p>}
+                      <div className="btn-row" style={{ marginTop: 12 }}>
+                        <button className={a.yesNo === 'yes' ? 'btn-primary' : 'btn-ghost'} onClick={() => setA({ yesNo: 'yes' })}>
+                          Yes
+                        </button>
+                        <button className={a.yesNo === 'no' ? 'btn-primary' : 'btn-ghost'} onClick={() => setA({ yesNo: 'no' })}>
+                          No
+                        </button>
+                        <button className={a.yesNo === 'na' ? 'btn-primary' : 'btn-ghost'} onClick={() => setA({ yesNo: 'na' })}>
+                          N/A
+                        </button>
+                      </div>
+
+                      <div className="btn-row" style={{ marginTop: 12 }}>
+                        <button
+                          type="button"
+                          className={commentOpen ? 'btn-primary' : 'btn-ghost'}
+                          onClick={() => setShowComment(prev => new Set(prev).add(q.id))}
+                        >
+                          💬 Comments / Corrective actions
+                        </button>
+                        <button
+                          type="button"
+                          className={mediaOpen ? 'btn-primary' : 'btn-ghost'}
+                          onClick={() => setShowMedia(prev => new Set(prev).add(q.id))}
+                        >
+                          📎 Media
+                        </button>
+                        <button
+                          type="button"
+                          className={a.flagged ? 'btn-primary' : 'btn-ghost'}
+                          onClick={() => setA({ flagged: !a.flagged })}
+                        >
+                          🚩 Flag
+                        </button>
+                      </div>
+
+                      {commentOpen && (
+                        <textarea
+                          style={{ marginTop: 12 }}
+                          value={a.reason ?? ''}
+                          onChange={(e) => setA({ reason: e.target.value })}
+                          placeholder="Comments / Corrective actions (if applicable)"
+                        />
+                      )}
+                      {mediaOpen && (
+                        <div style={{ marginTop: 12 }}>
+                          <button type="button" className="btn-ghost" onClick={() => setCameraForQ(q.id)}>
+                            {photos[q.id] ? 'Retake photo' : 'Take photo'}
+                          </button>
+                          {cameraForQ === q.id && (
+                            <CameraCapture
+                              onCapture={(file) => { setPhotos(prev => ({ ...prev, [q.id]: file })); setCameraForQ(null); }}
+                              onClose={() => setCameraForQ(null)}
+                            />
+                          )}
+                        </div>
+                      )}
+
+                      <div className="btn-row" style={{ marginTop: 20 }}>
+                        <button
+                          onClick={() => (qIndex === 0 ? setReviewLevel(null) : setQIndex(i => i - 1))}
+                          className="btn-ghost"
+                        >
+                          {qIndex === 0 ? 'Cancel' : 'Back'}
+                        </button>
+                        {isLast ? (
+                          <button onClick={submitReview} disabled={submitting || !a.yesNo} className="btn-primary">
+                            {submitting ? 'Submitting...' : 'Submit'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setQIndex(i => i + 1)}
+                            disabled={!a.yesNo}
+                            className="btn-primary"
+                          >
+                            Next
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+function rangeText(min: number | null, max: number | null, unit: string) {
+  if (min !== null && max !== null) return `between ${min} and ${max}${unit}`;
+  if (max !== null) return `at or below ${max}${unit}`;
+  if (min !== null) return `at least ${min}${unit}`;
+  return 'the acceptable range';
+}
+
+// Temperature readings an L1 recorded outside the acceptable range, with their
+// comment/corrective action and photos, shown to L2 and L3 on the shift card
+// and at the top of the review.
+function ExceptionsPanel({ exceptions, stationNames }: { exceptions: any[]; stationNames: string[] }) {
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [photoError, setPhotoError] = useState('');
+
+  const show = async (path: string) => {
+    setPhotoError('');
+    try {
+      const res = await fetch(`/api/manager/line-check/photo-url?path=${encodeURIComponent(path)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setUrls((prev) => ({ ...prev, [path]: data.url }));
+    } catch (e: any) {
+      setPhotoError(e.message || 'Could not load the photo.');
+    }
+  };
+
+  const photo = (path: string | null, label: string) => path && (
+    urls[path]
+      ? <img src={urls[path]} alt={label} style={{ maxWidth: '100%', borderRadius: 8, marginTop: 6 }} />
+      : <button className="btn-ghost" style={{ width: 'auto', minHeight: 32, padding: '4px 10px', fontSize: 12 }} onClick={() => show(path)}>{label}</button>
+  );
+
+  return (
+    <div className="banner error" style={{ marginTop: 12 }}>
+      <strong>⚠ {exceptions.length} temperature reading{exceptions.length === 1 ? '' : 's'} outside the acceptable range</strong>
+      {photoError && <div className="desc">{photoError}</div>}
+      {exceptions.map((e, i) => (
+        <div key={i} style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+          <div style={{ fontWeight: 600 }}>{e.prompt}</div>
+          <div className="desc">
+            {stationNames[e.stationNo - 1] || `Station ${e.stationNo}`} · {e.value !== null && e.value !== undefined ? `reading ${e.value}${e.unit}, should be ${rangeText(e.min, e.max, e.unit)}` : `marked outside the acceptable range (${rangeText(e.min, e.max, e.unit)})`}
+          </div>
+          <div className="desc">{e.reason ? `Corrective action: ${e.reason}` : 'No corrective action recorded.'}</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {photo(e.photoPath, 'View photo')}
+            {photo(e.correctionPhotoPath, 'View photo after correction')}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
