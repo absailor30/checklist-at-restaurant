@@ -537,7 +537,7 @@ export function ManagerApp({ view = 'dashboard' }: { view?: ManagerView }) {
           </div>
         )}
 
-        {view === 'dashboard' && canReviewL3 && (
+        {view === 'dashboard' && role === 'Admin' && (
           <div className="card" style={{ marginBottom: 16 }}>
             <strong>Team</strong>
             {teamMessage && <div className="banner info" style={{ margin: '8px 0' }}>{teamMessage}</div>}

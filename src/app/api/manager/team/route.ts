@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const manager = await currentManager();
   if (!manager) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
-  if (!manager.canManage) return NextResponse.json({ error: 'CEO/Owner access required.' }, { status: 403 });
+  if (manager.roleName !== 'Admin') return NextResponse.json({ error: 'Admin access required.' }, { status: 403 });
 
   const db = createAdminClient();
   const { data: users, error } = await db
@@ -38,7 +38,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const manager = await currentManager();
   if (!manager) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
-  if (!manager.canManage) return NextResponse.json({ error: 'CEO/Owner access required.' }, { status: 403 });
+  if (manager.roleName !== 'Admin') return NextResponse.json({ error: 'Admin access required.' }, { status: 403 });
   if (!manager.approved) return NextResponse.json({ error: 'Your own account is still waiting for approval.' }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
