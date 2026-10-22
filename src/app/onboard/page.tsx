@@ -65,7 +65,7 @@ export default function OnboardPage() {
         </div>
 
         <div className="btn-row">
-          <a className="btn btn-ghost" href="/owner"
+          <a className="btn btn-ghost" href="/l3"
              style={{ textAlign: 'center', textDecoration: 'none' }}>Dashboard</a>
           <a className="btn btn-primary" href="/manage"
              style={{ textAlign: 'center', textDecoration: 'none' }}>Add staff</a>

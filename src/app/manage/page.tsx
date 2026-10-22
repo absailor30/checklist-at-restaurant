@@ -82,7 +82,7 @@ export default function ManagePage() {
           <h1>Staff</h1>
           <div className="sub">{staff.filter((s) => s.isActive).length} active</div>
         </div>
-        <a className="btn-ghost" href="/owner"
+        <a className="btn-ghost" href="/l3"
            style={{ width: 'auto', minHeight: 40, padding: '8px 14px', textDecoration: 'none' }}>
           Dashboard
         </a>
