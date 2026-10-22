@@ -78,17 +78,12 @@ You now have a link like `https://checklist-at-restaurant.vercel.app`.
 
 ---
 
-## Step 3 — Create the demo data
+## Step 3 — Create your first brand
 
-Open `your-link/setup` in a browser, enter the **SETUP_PASSWORD** you chose,
-and click **Create demo**.
-
-That builds the Spice Garden demo group — three outlets, fourteen staff, eight
-checklists, two weeks of history — and creates the private storage bucket that
-photos go into.
-
-It should report something like: *3 outlets, 14 staff, 24 checklists, ~1400
-submissions, N locked items.*
+The old demo-data tool (Spice Garden) was moved to the branch
+`archive/department-and-demo-2026-10-22`. Instead, open `your-link/setup`, use
+**Onboard a new brand**, and create the brand and its first logins there (or
+use the Excel upload). The private photo storage bucket is created on first use.
 
 ---
 

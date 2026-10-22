@@ -9,10 +9,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "db:push": "supabase db push",
-    "db:seed": "tsx scripts/seed.ts",
-    "db:reset-demo": "tsx scripts/seed.ts --reset",
-    "verify": "bash scripts/verify.sh",
-    "checklist:doc": "tsx scripts/make-checklist-doc.ts"
+    "verify": "bash scripts/verify.sh"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

@@ -1,8 +1,6 @@
 import { json } from '@/lib/no-store';
 import { cronTokenMatches } from '@/lib/cron-auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { ensureRuns, refreshLocks } from '@/lib/checklist';
-import { notify, recipientsForLock } from '@/lib/notify';
 import { todayIn, zonedToUtc } from '@/lib/time';
 import { deadlineFor, hardStopOf } from '@/lib/line-check/bank';
 import { activeShiftsOf } from '@/lib/line-check/shifts';
@@ -12,14 +10,9 @@ import { enforceLineCheckMisses, enforceShiftMisses } from '@/lib/line-check/cro
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-// The scheduled job: create each outlet's runs for the day, freeze items whose
-// due time has passed, escalate ones still outstanding, and notify whoever is
-// currently empowered to act.
-//
-// Screens also refresh lock state when they load, so the app is never stale
-// for someone looking at it. This job exists for the hours when nobody is
-// looking — overnight, and between shifts — which is exactly when a missed
-// closing task needs to reach a manager.
+// The daily job: marks stations nobody started as missed once a shift's deadline has passed
+// (per shift when the brand has deadlines), and removes photo files past their retention.
+// The 5-minute reminders are a separate job: /api/cron/reminders.
 export async function GET(request: Request) {
   const denied = authorise(request);
   if (denied) return denied;
@@ -29,12 +22,11 @@ export async function GET(request: Request) {
 
   const { data: orgs, error: orgError } = await db
     .from('organisations')
-    .select('id, name, overdue_grace_minutes, unlock_escalation_minutes');
+    .select('id, name');
   if (orgError) return json({ error: orgError.message }, { status: 500 });
 
   const summary = {
     organisations: 0, outlets: 0,
-    frozen: 0, refrozen: 0, escalated: 0, notified: 0,
     errors: [] as string[],
   };
 
@@ -46,9 +38,6 @@ export async function GET(request: Request) {
       .select('id, org_id, name, timezone, station_count')
       .eq('org_id', org.id)
       .eq('is_active', true);
-
-    const { data: roles } = await db
-      .from('roles').select('id, level').eq('org_id', org.id);
 
     // Read separately so a missing column can never take the whole cron down.
     const { data: cfgRow } = await db
@@ -63,8 +52,6 @@ export async function GET(request: Request) {
       const date = todayIn(outlet.timezone);
 
       try {
-        await ensureRuns(db, outlet, date);
-        
         if (perShift) {
           for (const shift of shifts) {
             const deadline = deadlineFor(cfgRow?.line_check_config, shift);
@@ -77,54 +64,6 @@ export async function GET(request: Request) {
           if (Date.now() >= cutoff.getTime()) {
             await enforceLineCheckMisses(db, outlet.id, date);
           }
-        }
-
-        const changes = await refreshLocks(db, org, outlet.id, date);
-        if (!changes.length) continue;
-
-        // Resolve the titles and owning roles once for the whole batch rather
-        // than per change.
-        const itemIds = [...new Set(changes.map((c) => c.itemId))];
-        const runIds = [...new Set(changes.map((c) => c.runId))];
-
-        const [{ data: items }, { data: runs }] = await Promise.all([
-          db.from('checklist_items').select('id, title, template_id').in('id', itemIds),
-          db.from('checklist_runs')
-            .select('id, checklist_templates!inner(role_id)')
-            .in('id', runIds),
-        ]);
-
-        const titleById = new Map((items ?? []).map((i) => [i.id, i.title]));
-        const roleByRun = new Map((runs ?? []).map((r: any) => {
-          const t = Array.isArray(r.checklist_templates)
-            ? r.checklist_templates[0] : r.checklist_templates;
-          return [r.id, t?.role_id];
-        }));
-        const levelByRole = new Map((roles ?? []).map((r) => [r.id, r.level]));
-
-        for (const change of changes) {
-          if (change.kind === 'frozen') summary.frozen++;
-          if (change.kind === 'refrozen') summary.refrozen++;
-          if (change.kind === 'escalated') summary.escalated++;
-
-          const submitterLevel = levelByRole.get(roleByRun.get(change.runId)) ?? 1;
-          const recipients = await recipientsForLock(
-            db, org.id, outlet.id, submitterLevel, change.escalationLevel
-          );
-
-          const title = titleById.get(change.itemId) ?? 'A checklist task';
-          summary.notified += await notify(db, org.id, recipients, {
-            kind: change.kind === 'escalated' ? 'escalated' : 'locked',
-            title:
-              change.kind === 'escalated'
-                ? `Still not done: ${title}`
-                : `Locked: ${title}`,
-            body:
-              change.kind === 'escalated'
-                ? `${outlet.name} — this has now escalated to your level.`
-                : `${outlet.name} — missed its due time and is locked. Unlock it or resolve it.`,
-            payload: { runId: change.runId, itemId: change.itemId, outletId: outlet.id },
-          });
         }
       } catch (e: any) {
         // One bad outlet must not stop the rest of the estate being processed.

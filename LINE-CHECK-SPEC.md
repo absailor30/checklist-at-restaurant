@@ -1,7 +1,8 @@
 # Line Check — spec for the next build
 
-The existing 13-department checklist system stays in the repo, unused. The line
-check below becomes the product. Do not delete the department code.
+The old 13-department checklist system and its demo-data tool were moved out of the main
+branch on 2026-10-22 and are kept on the branch `archive/department-and-demo-2026-10-22`.
+The line check below is the product.
 
 Open client questions from an earlier draft (q1–q6) are **parked**. Do not
 re-ask them. Build from the locked sample bank below.

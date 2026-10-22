@@ -31,7 +31,6 @@ step "no ambiguous relationship hints"  bash scripts/check-embeds.sh
 
 echo "--- database ---"
 step "migrations apply cleanly"  bash scripts/verify-db.sh
-step "seeder produces valid rows" bash scripts/verify-seed.sh
 
 echo "--- rendering ---"
 npx next start -p 3125 >/tmp/verify-server.log 2>&1 &
