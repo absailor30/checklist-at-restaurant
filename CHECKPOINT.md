@@ -118,3 +118,12 @@ Staff line check: `/staff`
 Manager line check: `/manager`
 
 Current URLs (2026-10-03): L1 `/l1`, L2/L3 sign-in `/manager`, L3 report `/l3`, brand setup `/setup`, platform admin `/admin/pending`. (`/staff` above is the older L1 route.)
+
+## Future look and feel (noted 2026-10-25, NOT started)
+Cosmetics the owner wants later, for reference only:
+- Smooth edges: rounded corners and circles, no sharp edges.
+- Friendly letter font.
+- Theme: peace.
+- Colour scheme: rich black feel.
+- 3D feeling (depth, soft shadows, layered surfaces).
+Apply through the theme tokens in `src/app/globals.css` and `theme-switcher`, so all themes (Standard / Colour-blind, Light / Dark) keep working.
